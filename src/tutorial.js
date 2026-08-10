@@ -108,38 +108,16 @@ For most users, <b>Inject at Depth is recommended</b>.`,
         highlight: '#rmr_inject_depth'
     },
     {
-        id: 'arc-analyzer',
-        titleKey: 'tutorial_arc_analyzer_title',
-        titleDefault: 'Arc Analyzer - Creating Chapters',
-        contentKey: 'tutorial_arc_analyzer_content',
-        contentDefault: `<b>Arc Analyzer</b> is the easiest way to create chapters. It scans your chat and suggests natural chapter endpoints based on story beats.
-
-<b>How to use it:</b>
-1. Select an <i>Arc Analyzer Profile</i> (or use default)
-2. Click <i>"Analyze Arcs"</i>
-3. Review the suggested chapter breaks
-4. Click on any arc to create a chapter ending at that point
-
-The AI will then summarize everything from the start (or last chapter) to that point.
-
-<i>Tip:</i> Use a fast and cheap model for arc analysis - it doesn't need to be as smart as summarization.`,
-        highlight: '#rmr_run_arc_analyzer'
-    },
-    {
         id: 'manual-chapter',
         titleKey: 'tutorial_manual_chapter_title',
         titleDefault: 'Manual Chapter Creation',
         contentKey: 'tutorial_manual_chapter_content',
-        contentDefault: `You can also manually end chapters by clicking the <b>⏹</b> button on any message.
+        contentDefault: `You can end chapters by clicking the <b>⏹</b> button on any message.
 
 <b>How it works:</b>
 1. Hover over any message in the chat
 2. Click the stop (⏹) button that appears
 3. The AI will summarize all messages from the previous chapter end (or chat start) to that message
-
-<b>When to use manual vs Arc Analyzer:</b>
-• <i>Arc Analyzer:</i> Great for catching up on long chats
-• <i>Manual:</i> Better for ongoing chats where you know good stopping points
 
 The button only appears if <i>"End Chapter"</i> is enabled in Message Buttons settings.`
     },
@@ -251,7 +229,6 @@ The agent ends its session by calling <i>end_information_retrieval</i> with the 
 • <b>Summarization:</b> Prompts for creating chapter summaries
 • <b>Query:</b> Prompts for answering chapter questions
 • <b>Timeline Fill:</b> Prompts for context retrieval
-• <b>Arc Analyzer:</b> Prompts for detecting story arcs
 
 <b>Managing presets:</b>
 • <i>Save:</i> Create a new preset from current settings
@@ -285,7 +262,6 @@ The agent ends its session by calling <i>end_information_retrieval</i> with the 
 
 <b>Advanced:</b>
 • <code>/timeline-fill</code> - Manual context retrieval
-• <code>/arc-analyze</code> - Open Arc Analyzer
 • <code>/remove-reasoning N-M</code> - Remove reasoning blocks`
     },
     {
@@ -298,10 +274,9 @@ The agent ends its session by calling <i>end_information_retrieval</i> with the 
 <b>Quick Start Checklist:</b>
 ☐ Create connection profiles for your AI providers
 ☐ Enable "Inject at Depth" for automatic timeline context
-☐ Create some chapters using Arc Analyzer or manual buttons
+☐ Create some chapters using the manual buttons
 
 <b>Key Features:</b>
-• <b>Arc Analyzer</b> - Automatic chapter suggestions
 • <b>Inject at Depth</b> - Automatic timeline injection
 • <b>Import/Export</b> - Easy configuration sharing
 

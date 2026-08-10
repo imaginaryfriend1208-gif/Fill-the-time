@@ -25,7 +25,6 @@ const defaultSettings = {
 	"tools_enabled": true,
 	"quick_reply_buttons_location": "send_form", // "send_form" or "extensions_menu"
 	"loading_screen_enabled": false,
-	"shift_enter_hotkey_enabled": false, // enable Shift+Enter hotkey for Retrieve and Send
 	"show_buttons": [Buttons.STOP],
 	// prompt/text injection settings
 	"memory_system_prompt": `<role>You are a literary analysis expert specializing in narrative structure and scene summarization. Your expertise is in distilling complex narrative elements into concise, query-friendly summaries.</role>
@@ -235,71 +234,6 @@ You may include both styles in the same array. Return ONLY the JSON array, no co
 	],
 	"current_timeline_fill_preset": "preset-default-timeline-fill",
 
-	// Arc analyzer settings
-	"arc_analyzer_system_prompt": `# Role
-
-You are Arc Analyzer. Your task is to identify potential narrative arcs in a chat transcript that could serve as chapters. Each arc begins at the start of the conversation (the first message with the lowest ID) and ends at a natural narrative conclusion point. You'll be suggesting multiple possible "endings" to the story that begins at the chat's opening.
-
-## Output Format (Strict)
-Return ONLY a JSON array (no prose, no code fences). Each item is an object with:
-- title: Short, concrete title (≤ 8 words)
-- summary: 2-4 sentences summarizing the arc's main beats
-- chapterEnd: Integer index of the final message in this arc (must exactly match the absolute ID provided in the transcript for that message, such as the number in [id [N]]; do not calculate or use relative positions—use the exact ID value as given)
-- justification: 1-2 sentences explaining why this endpoint is a coherent boundary
-
-## Rules
-- Produce 3-7 arcs when possible; fewer is acceptable for shorter chats.
-- Arcs must be contiguous and strictly increasing by chapterEnd.
-- Arcs may overlap (end points may be only a few messages apart) to provide options for where to conclude a chapter.
-- Each arc should be at minimum 15 messages (defined as the smallest id you see in chat history - the chosen chapterEnd id).
-- Choose chapterEnd at natural narrative beats: resolutions, decisions, scene changes, or clear transitions.
-- Each arc should be self-contained in terms of information.
-- Prefer the latest message that still completes the arc (avoid cutting mid-beat).
-- Base everything only on the provided transcript (no invented details).
-- Use only valid message IDs that exist in the transcript (exactly as provided, without modification. Each id in the JSON array refers to the text it contains exactly).`,
-	"arc_analyzer_prompt_template": `# Chat History:
-{{chapterHistory}}
-
-## Timeline
-NOTE: This is strictly for reference to past events. NEVER use an ID mentioned here in your response.
-{{timeline}}`,
-	"arc_profile": null,
-	"arc_presets": [
-		{
-			"id": "preset-default-arc",
-			"name": "BasicArc",
-			"systemPrompt": `# Role
-
-You are Arc Analyzer. Your task is to identify potential narrative arcs in a chat transcript that could serve as chapters. Each arc begins at the start of the conversation (the first message with the lowest ID) and ends at a natural narrative conclusion point. You'll be suggesting multiple possible "endings" to the story that begins at the chat's opening.
-
-## Output Format (Strict)
-Return ONLY a JSON array (no prose, no code fences). Each item is an object with:
-- title: Short, concrete title (≤ 8 words)
-- summary: 2-4 sentences summarizing the arc's main beats
-- chapterEnd: Integer index of the final message in this arc (must exactly match the absolute ID provided in the transcript for that message, such as the number in [id [N]]; do not calculate or use relative positions—use the exact ID value as given)
-- justification: 1-2 sentences explaining why this endpoint is a coherent boundary
-
-## Rules
-- Produce 3-7 arcs when possible; fewer is acceptable for shorter chats.
-- Arcs must be contiguous and strictly increasing by chapterEnd.
-- Arcs may overlap (end points may be only a few messages apart) to provide options for where to conclude a chapter.
-- Each arc should be at minimum 15 messages (defined as the smallest id you see in chat history - the chosen chapterEnd id).
-- Choose chapterEnd at natural narrative beats: resolutions, decisions, scene changes, or clear transitions.
-- Each arc should be self-contained in terms of information.
-- Prefer the latest message that still completes the arc (avoid cutting mid-beat).
-- Base everything only on the provided transcript (no invented details).
-- Use only valid message IDs that exist in the transcript (exactly as provided, without modification. Each id in the JSON array refers to the text it contains exactly).`,
-			"userPrompt": `# Chat History:
-{{chapterHistory}}
-
-## Timeline
-NOTE: This is strictly for reference to past events. NEVER use an ID mentioned here in your response.
-{{timeline}}`,
-			"rateLimit": 0
-		}
-	],
-	"current_arc_preset": "preset-default-arc",
-
 	// Agentic timeline fill settings
 	"agentic_timeline_fill_enabled": false,
 	"agentic_timeline_fill_profile": null,
@@ -390,10 +324,6 @@ function reloadProfiles() {
 	if (timelineFillSelect?.length) {
 		timelineFillSelect.not(':first').remove();
 	}
-	const arcProfileSelect = $('#rmr_arc_profile');
-	if (arcProfileSelect?.length) {
-		arcProfileSelect.not(':first').remove();
-	}
 	const agenticTimelineFillSelect = $('#rmr_agentic_timeline_fill_profile');
 	if (agenticTimelineFillSelect?.length) {
 		agenticTimelineFillSelect.not(':first').remove();
@@ -401,9 +331,6 @@ function reloadProfiles() {
 	if (!extension_settings.connectionManager?.profiles) {
 		if (timelineFillSelect?.length) {
 			timelineFillSelect.val('');
-		}
-		if (arcProfileSelect?.length) {
-			arcProfileSelect.val('');
 		}
 		if (agenticTimelineFillSelect?.length) {
 			agenticTimelineFillSelect.val('');
@@ -427,16 +354,6 @@ function reloadProfiles() {
 				timelineFillSelect.val(profile.id);
 			}
 		}
-		if (arcProfileSelect?.length) {
-			arcProfileSelect.append(
-				$('<option></option>')
-					.attr('value', profile.id)
-					.text(profile.name)
-			);
-			if (settings.arc_profile == profile.id) {
-				arcProfileSelect.val(profile.id);
-			}
-		}
 		if (agenticTimelineFillSelect?.length) {
 			agenticTimelineFillSelect.append(
 				$('<option></option>')
@@ -458,8 +375,6 @@ async function loadSettingsUI() {
 	$('#rmr_memory_prompt_template').attr('placeholder', defaultSettings.memory_prompt_template);
 	$('#rmr_chapter_query_system_prompt').attr('placeholder', defaultSettings.chapter_query_system_prompt || 'System-level instructions for chapter queries (optional)');
 	$('#rmr_chapter_query_prompt_template').attr('placeholder', defaultSettings.chapter_query_prompt_template);
-	$('#rmr_arc_analyzer_system_prompt').attr('placeholder', defaultSettings.arc_analyzer_system_prompt || 'System-level instructions for arc analysis (optional)');
-	$('#rmr_arc_analyzer_prompt_template').attr('placeholder', defaultSettings.arc_analyzer_prompt_template);
 	$('#rmr_timeline_fill_system_prompt').attr('placeholder', defaultSettings.timeline_fill_system_prompt || 'System-level instructions for timeline fill (optional)');
 	$('#rmr_timeline_fill_prompt_template').attr('placeholder', defaultSettings.timeline_fill_prompt_template);
 	const mode_div = $(`#rmr_chapter_end_mode`);
@@ -537,7 +452,6 @@ async function loadSettingsUI() {
 		updateQuickReplyButtonsLocation();
 	});
 	$("#rmr_loading_screen_enabled").prop('checked', settings.loading_screen_enabled).on('click', toggleCheckboxSetting);
-	$("#rmr_shift_enter_hotkey_enabled").prop('checked', settings.shift_enter_hotkey_enabled).on('click', toggleCheckboxSetting);
 	// handle dropdowns
 	reloadProfiles();
 	$('#rmr_profile').on('input', () => {
@@ -613,27 +527,6 @@ async function loadSettingsUI() {
 			toastr.error("Non-existent profile selected.", "Timeline Memory");
 			timelineFillProfileSelect.val('');
 			settings.timeline_fill_profile = null;
-			getContext().saveSettingsDebounced();
-		}
-	});
-
-	// Arc analyzer profile dropdown
-	const arcProfileSelect = $('#rmr_arc_profile');
-	arcProfileSelect.on('input', () => {
-		const profile = arcProfileSelect.val();
-		if (!profile.length) {
-			settings.arc_profile = null;
-			getContext().saveSettingsDebounced();
-			return;
-		}
-		const profileID = extension_settings.connectionManager?.profiles ? extension_settings.connectionManager.profiles.findIndex(it => it.id == profile) : -1;
-		if (profileID >= 0) {
-			settings.arc_profile = profile;
-			getContext().saveSettingsDebounced();
-		} else {
-			toastr.error("Non-existent profile selected.", "Timeline Memory");
-			arcProfileSelect.val('');
-			settings.arc_profile = null;
 			getContext().saveSettingsDebounced();
 		}
 	});
@@ -750,17 +643,6 @@ async function loadSettingsUI() {
 	// Initialize preset UI
 	loadPresetUI();
 
-	// Wire the Arc Analyzer run button
-	$('#rmr_run_arc_analyzer').on('click', async () => {
-		try {
-			const { analyzeArcs } = await import('./memories.js');
-			await analyzeArcs();
-		} catch (err) {
-			console.error('Arc Analyzer error:', err);
-			toastr.error('Failed to run Arc Analyzer', 'Timeline Memory');
-		}
-	});
-
 	// Render summaries list after a short delay to ensure timeline data is loaded
 	setTimeout(() => renderSummariesList(), 100);
 	setupManualChapterControls();
@@ -860,14 +742,10 @@ function loadPresetUI() {
 	// Load timeline fill presets
 	reloadPresetOptions('timeline_fill');
 
-	// Load arc presets
-	reloadPresetOptions('arc');
-
 	// Set current preset selections
 	$('#rmr_summarize_preset').val(settings.current_summarize_preset || '');
 	$('#rmr_query_preset').val(settings.current_query_preset || '');
 	$('#rmr_timeline_fill_preset').val(settings.current_timeline_fill_preset || '');
-	$('#rmr_arc_preset').val(settings.current_arc_preset || '');
 
 	// Handle preset selection changes
 	$('#rmr_summarize_preset').on('change', function () {
@@ -913,19 +791,6 @@ function loadPresetUI() {
 		}
 	});
 
-	$('#rmr_arc_preset').on('change', function () {
-		const presetId = $(this).val();
-		if (presetId) {
-			applyPreset('arc', presetId);
-			updatePresetButtons('arc', presetId);
-			refreshPromptFields();
-		} else {
-			settings.current_arc_preset = null;
-			getContext().saveSettingsDebounced();
-			updatePresetButtons('arc', null);
-		}
-	});
-
 	// Handle preset save/update/delete buttons
 	$('#rmr_save_summarize_preset').on('click', () => handleSavePreset('summarize'));
 	$('#rmr_update_summarize_preset').on('click', () => handleUpdatePreset('summarize'));
@@ -939,15 +804,10 @@ function loadPresetUI() {
 	$('#rmr_update_timeline_fill_preset').on('click', () => handleUpdatePreset('timeline_fill'));
 	$('#rmr_delete_timeline_fill_preset').on('click', () => handleDeletePreset('timeline_fill'));
 
-	$('#rmr_save_arc_preset').on('click', () => handleSavePreset('arc'));
-	$('#rmr_update_arc_preset').on('click', () => handleUpdatePreset('arc'));
-	$('#rmr_delete_arc_preset').on('click', () => handleDeletePreset('arc'));
-
 	// Update initial button states
 	updatePresetButtons('summarize', settings.current_summarize_preset);
 	updatePresetButtons('query', settings.current_query_preset);
 	updatePresetButtons('timeline_fill', settings.current_timeline_fill_preset);
-	updatePresetButtons('arc', settings.current_arc_preset);
 
 	// Set up individual preset import/export handlers
 	$('#rmr_export_summarize_preset').on('click', () => handleExportPreset('summarize'));
@@ -956,9 +816,6 @@ function loadPresetUI() {
 	$('#rmr_import_query_preset').on('click', () => handleImportPreset('query'));
 	$('#rmr_export_timeline_fill_preset').on('click', () => handleExportPreset('timeline_fill'));
 	$('#rmr_import_timeline_fill_preset').on('click', () => handleImportPreset('timeline_fill'));
-	$('#rmr_export_arc_preset').on('click', () => handleExportPreset('arc'));
-	$('#rmr_import_arc_preset').on('click', () => handleImportPreset('arc'));
-
 	// Set up master export/import handlers
 	$('#rmr_master_export').on('click', handleMasterExport);
 	$('#rmr_master_import').on('click', handleMasterImport);
@@ -977,7 +834,6 @@ function handleExportPreset(presetType) {
 		let currentPresetId = settings.current_summarize_preset;
 		if (presetType === 'query') currentPresetId = settings.current_query_preset;
 		if (presetType === 'timeline_fill') currentPresetId = settings.current_timeline_fill_preset;
-		if (presetType === 'arc') currentPresetId = settings.current_arc_preset;
 		const presetLabel = findPresetById(presetType, currentPresetId)?.name || 'preset';
 		a.download = `${presetType}-${currentPresetId}-${presetLabel.replace(/[^a-z0-9]/gi, '_')}.json`;
 		document.body.appendChild(a);
@@ -1039,7 +895,6 @@ function reloadPresetOptions(presetType) {
 	let selectId = '#rmr_summarize_preset';
 	if (presetType === 'query') selectId = '#rmr_query_preset';
 	if (presetType === 'timeline_fill') selectId = '#rmr_timeline_fill_preset';
-	if (presetType === 'arc') selectId = '#rmr_arc_preset';
 	const select = $(selectId);
 	const currentVal = select.val();
 
@@ -1049,7 +904,6 @@ function reloadPresetOptions(presetType) {
 	let presets = getSummarizePresets();
 	if (presetType === 'query') presets = getQueryPresets();
 	if (presetType === 'timeline_fill') presets = getTimelineFillPresets();
-	if (presetType === 'arc') presets = getArcPresets();
 	presets.forEach(preset => {
 		select.append(
 			$('<option></option>')
@@ -1074,10 +928,6 @@ function updatePresetButtons(presetType, presetId) {
 		updateButton = '#rmr_update_timeline_fill_preset';
 		deleteButton = '#rmr_delete_timeline_fill_preset';
 	}
-	if (presetType === 'arc') {
-		updateButton = '#rmr_update_arc_preset';
-		deleteButton = '#rmr_delete_arc_preset';
-	}
 
 	$(updateButton).prop('disabled', !hasPreset);
 	$(deleteButton).prop('disabled', !hasPreset);
@@ -1094,9 +944,6 @@ function refreshPromptFields() {
 	$('#rmr_profile').val(settings.profile || '');
 	$('#rmr_query_profile').val(settings.query_profile || '');
 	$('#rmr_timeline_fill_profile').val(settings.timeline_fill_profile || '');
-	$('#rmr_arc_analyzer_system_prompt').val(settings.arc_analyzer_system_prompt);
-	$('#rmr_arc_analyzer_prompt_template').val(settings.arc_analyzer_prompt_template);
-	$('#rmr_arc_profile').val(settings.arc_profile || '');
 	$('#rmr_rate_limit').val(settings.rate_limit);
 }
 
@@ -1107,7 +954,6 @@ function handleSavePreset(presetType) {
 		let selectId = '#rmr_summarize_preset';
 		if (presetType === 'query') selectId = '#rmr_query_preset';
 		if (presetType === 'timeline_fill') selectId = '#rmr_timeline_fill_preset';
-		if (presetType === 'arc') selectId = '#rmr_arc_preset';
 		$(selectId).val(preset.id);
 
 		if (presetType === 'summarize') {
@@ -1116,8 +962,6 @@ function handleSavePreset(presetType) {
 			settings.current_query_preset = preset.id;
 		} else if (presetType === 'timeline_fill') {
 			settings.current_timeline_fill_preset = preset.id;
-		} else if (presetType === 'arc') {
-			settings.current_arc_preset = preset.id;
 		}
 
 		updatePresetButtons(presetType, preset.id);
@@ -1130,7 +974,6 @@ function handleUpdatePreset(presetType) {
 	let currentPresetId = settings.current_summarize_preset;
 	if (presetType === 'query') currentPresetId = settings.current_query_preset;
 	if (presetType === 'timeline_fill') currentPresetId = settings.current_timeline_fill_preset;
-	if (presetType === 'arc') currentPresetId = settings.current_arc_preset;
 
 	if (!currentPresetId) {
 		toastr.warning(`No ${presetType} preset selected to update.`);
@@ -1154,11 +997,6 @@ function handleUpdatePreset(presetType) {
 		userPrompt = settings.timeline_fill_prompt_template;
 		profile = settings.timeline_fill_profile;
 		rateLimit = 0;
-	} else if (presetType === 'arc') {
-		systemPrompt = settings.arc_analyzer_system_prompt;
-		userPrompt = settings.arc_analyzer_prompt_template;
-		profile = settings.arc_profile;
-		rateLimit = 0;
 	}
 
 	const updated = updatePreset(presetType, currentPresetId, {
@@ -1179,7 +1017,6 @@ function handleDeletePreset(presetType) {
 	let currentPresetId = settings.current_summarize_preset;
 	if (presetType === 'query') currentPresetId = settings.current_query_preset;
 	if (presetType === 'timeline_fill') currentPresetId = settings.current_timeline_fill_preset;
-	if (presetType === 'arc') currentPresetId = settings.current_arc_preset;
 
 	if (!currentPresetId) {
 		toastr.warning(`No ${presetType} preset selected to delete.`);
@@ -1198,7 +1035,6 @@ function handleDeletePreset(presetType) {
 		let selectId = '#rmr_summarize_preset';
 		if (presetType === 'query') selectId = '#rmr_query_preset';
 		if (presetType === 'timeline_fill') selectId = '#rmr_timeline_fill_preset';
-		if (presetType === 'arc') selectId = '#rmr_arc_preset';
 		$(selectId).val('');
 		updatePresetButtons(presetType, null);
 		toastr.success(`${presetType} preset deleted successfully.`);
@@ -1295,16 +1131,11 @@ export function getTimelineFillPresets() {
 	return settings.timeline_fill_presets || [];
 }
 
-export function getArcPresets() {
-	return settings.arc_presets || [];
-}
-
 export function findPresetById(presetType, presetId) {
 	if (!presetId) return null;
 	let presets = getSummarizePresets();
 	if (presetType === 'query') presets = getQueryPresets();
 	if (presetType === 'timeline_fill') presets = getTimelineFillPresets();
-	if (presetType === 'arc') presets = getArcPresets();
 	return presets.find(preset => preset.id === presetId) || null;
 }
 
@@ -1324,8 +1155,6 @@ export function createPreset(presetType, name, systemPrompt, userPrompt, profile
 		settings.query_presets.push(preset);
 	} else if (presetType === 'timeline_fill') {
 		settings.timeline_fill_presets.push(preset);
-	} else if (presetType === 'arc') {
-		settings.arc_presets.push(preset);
 	}
 
 	getContext().saveSettingsDebounced();
@@ -1336,7 +1165,6 @@ export function updatePreset(presetType, presetId, updates) {
 	let presets = getSummarizePresets();
 	if (presetType === 'query') presets = getQueryPresets();
 	if (presetType === 'timeline_fill') presets = getTimelineFillPresets();
-	if (presetType === 'arc') presets = getArcPresets();
 	const presetIndex = presets.findIndex(preset => preset.id === presetId);
 
 	if (presetIndex === -1) return null;
@@ -1350,7 +1178,6 @@ export function deletePreset(presetType, presetId) {
 	let presets = getSummarizePresets();
 	if (presetType === 'query') presets = getQueryPresets();
 	if (presetType === 'timeline_fill') presets = getTimelineFillPresets();
-	if (presetType === 'arc') presets = getArcPresets();
 	const presetIndex = presets.findIndex(preset => preset.id === presetId);
 
 	if (presetIndex === -1) return false;
@@ -1364,8 +1191,6 @@ export function deletePreset(presetType, presetId) {
 		settings.current_query_preset = null;
 	} else if (presetType === 'timeline_fill' && settings.current_timeline_fill_preset === presetId) {
 		settings.current_timeline_fill_preset = null;
-	} else if (presetType === 'arc' && settings.current_arc_preset === presetId) {
-		settings.current_arc_preset = null;
 	}
 
 	getContext().saveSettingsDebounced();
@@ -1400,13 +1225,6 @@ export function applyPreset(presetType, presetId) {
 		if (preset.profile !== null && preset.profile !== undefined) {
 			settings.timeline_fill_profile = preset.profile;
 		}
-	} else if (presetType === 'arc') {
-		settings.current_arc_preset = presetId;
-		settings.arc_analyzer_system_prompt = preset.systemPrompt;
-		settings.arc_analyzer_prompt_template = preset.userPrompt;
-		if (preset.profile !== null && preset.profile !== undefined) {
-			settings.arc_profile = preset.profile;
-		}
 	}
 
 	getContext().saveSettingsDebounced();
@@ -1434,18 +1252,12 @@ export function createPresetFromCurrentSettings(presetType) {
 		userPrompt = settings.timeline_fill_prompt_template;
 		profile = settings.timeline_fill_profile;
 		rateLimit = 0;
-	} else if (presetType === 'arc') {
-		systemPrompt = settings.arc_analyzer_system_prompt;
-		userPrompt = settings.arc_analyzer_prompt_template;
-		profile = settings.arc_profile;
-		rateLimit = 0;
 	}
 
 	// Check for existing preset with same name
 	let existingPresets = getSummarizePresets();
 	if (presetType === 'query') existingPresets = getQueryPresets();
 	if (presetType === 'timeline_fill') existingPresets = getTimelineFillPresets();
-	if (presetType === 'arc') existingPresets = getArcPresets();
 	const existingPreset = existingPresets.find(p => p.name.toLowerCase() === name.toLowerCase());
 
 	if (existingPreset) {
@@ -1468,7 +1280,6 @@ export function exportCurrentPreset(presetType) {
 	let currentPresetId = settings.current_summarize_preset;
 	if (presetType === 'query') currentPresetId = settings.current_query_preset;
 	if (presetType === 'timeline_fill') currentPresetId = settings.current_timeline_fill_preset;
-	if (presetType === 'arc') currentPresetId = settings.current_arc_preset;
 
 	if (!currentPresetId) {
 		throw new Error(`No ${presetType} preset selected for export`);
@@ -1503,7 +1314,6 @@ function findDuplicatePreset(presetType, presetName) {
 	let presets = getSummarizePresets();
 	if (presetType === 'query') presets = getQueryPresets();
 	if (presetType === 'timeline_fill') presets = getTimelineFillPresets();
-	if (presetType === 'arc') presets = getArcPresets();
 	return presets.find(preset => preset.name.toLowerCase() === presetName.toLowerCase());
 }
 
@@ -1543,7 +1353,7 @@ export async function importPreset(jsonData) {
 		}
 
 		const presetType = importData.type;
-		if (presetType !== 'summarize' && presetType !== 'query' && presetType !== 'timeline_fill' && presetType !== 'arc') {
+		if (presetType !== 'summarize' && presetType !== 'query' && presetType !== 'timeline_fill') {
 			throw new Error('Invalid preset file: unknown preset type');
 		}
 
@@ -1589,8 +1399,6 @@ export async function importPreset(jsonData) {
 			settings.query_presets.push(finalPreset);
 		} else if (presetType === 'timeline_fill') {
 			settings.timeline_fill_presets.push(finalPreset);
-		} else if (presetType === 'arc') {
-			settings.arc_presets.push(finalPreset);
 		}
 
 		getContext().saveSettingsDebounced();
@@ -1620,7 +1428,6 @@ export function exportAllSettings() {
 		if (presetType === 'summarize') currentId = settings.current_summarize_preset;
 		else if (presetType === 'query') currentId = settings.current_query_preset;
 		else if (presetType === 'timeline_fill') currentId = settings.current_timeline_fill_preset;
-		else if (presetType === 'arc') currentId = settings.current_arc_preset;
 
 		if (!currentId) return null;
 
@@ -1658,20 +1465,16 @@ export function exportAllSettings() {
 			chapter_query_prompt_template: settings.chapter_query_prompt_template,
 			timeline_fill_system_prompt: settings.timeline_fill_system_prompt,
 			timeline_fill_prompt_template: settings.timeline_fill_prompt_template,
-			arc_analyzer_system_prompt: settings.arc_analyzer_system_prompt,
-			arc_analyzer_prompt_template: settings.arc_analyzer_prompt_template,
 
 			// Current preset selections
 			current_summarize_preset: settings.current_summarize_preset,
 			current_query_preset: settings.current_query_preset,
-			current_timeline_fill_preset: settings.current_timeline_fill_preset,
-			current_arc_preset: settings.current_arc_preset
+			current_timeline_fill_preset: settings.current_timeline_fill_preset
 		},
 		presets: {
 			summarize: getSelectedPreset('summarize') ? [getSelectedPreset('summarize')] : [],
 			query: getSelectedPreset('query') ? [getSelectedPreset('query')] : [],
-			timeline_fill: getSelectedPreset('timeline_fill') ? [getSelectedPreset('timeline_fill')] : [],
-			arc: getSelectedPreset('arc') ? [getSelectedPreset('arc')] : []
+			timeline_fill: getSelectedPreset('timeline_fill') ? [getSelectedPreset('timeline_fill')] : []
 		}
 	};
 
@@ -1718,13 +1521,11 @@ export async function importAllSettings(jsonData) {
 			if (importData.settings.chapter_query_prompt_template !== undefined) settings.chapter_query_prompt_template = importData.settings.chapter_query_prompt_template;
 			if (importData.settings.timeline_fill_system_prompt !== undefined) settings.timeline_fill_system_prompt = importData.settings.timeline_fill_system_prompt;
 			if (importData.settings.timeline_fill_prompt_template !== undefined) settings.timeline_fill_prompt_template = importData.settings.timeline_fill_prompt_template;
-			if (importData.settings.arc_analyzer_system_prompt !== undefined) settings.arc_analyzer_system_prompt = importData.settings.arc_analyzer_system_prompt;
-			if (importData.settings.arc_analyzer_prompt_template !== undefined) settings.arc_analyzer_prompt_template = importData.settings.arc_analyzer_prompt_template;
 		}
 
 		// Import presets
 		if (result.importPresets) {
-			const presetTypes = ['summarize', 'query', 'timeline_fill', 'arc'];
+			const presetTypes = ['summarize', 'query', 'timeline_fill'];
 
 			for (const presetType of presetTypes) {
 				const importedPresets = importData.presets[presetType] || [];
@@ -1788,10 +1589,6 @@ export async function importAllSettings(jsonData) {
 				const preset = findPresetById('timeline_fill', importData.settings.current_timeline_fill_preset);
 				if (preset) settings.current_timeline_fill_preset = preset.id;
 			}
-			if (importData.settings.current_arc_preset) {
-				const preset = findPresetById('arc', importData.settings.current_arc_preset);
-				if (preset) settings.current_arc_preset = preset.id;
-			}
 		}
 
 		getContext().saveSettingsDebounced();
@@ -1814,15 +1611,14 @@ async function showMasterImportDialog(importData) {
 		const presetCounts = {
 			summarize: (importData.presets.summarize || []).length,
 			query: (importData.presets.query || []).length,
-			timeline_fill: (importData.presets.timeline_fill || []).length,
-			arc: (importData.presets.arc || []).length
+			timeline_fill: (importData.presets.timeline_fill || []).length
 		};
-		const totalPresets = presetCounts.summarize + presetCounts.query + presetCounts.timeline_fill + presetCounts.arc;
+		const totalPresets = presetCounts.summarize + presetCounts.query + presetCounts.timeline_fill;
 
 		const message = `Fill the Time Configuration Import\n\n` +
 			`This file contains:\n` +
 			`• Settings configuration\n` +
-			`• ${totalPresets} presets (${presetCounts.summarize} summarize, ${presetCounts.query} query, ${presetCounts.timeline_fill} timeline fill, ${presetCounts.arc} arc)\n\n` +
+			`• ${totalPresets} presets (${presetCounts.summarize} summarize, ${presetCounts.query} query, ${presetCounts.timeline_fill} timeline fill)\n\n` +
 			`How would you like to handle preset name conflicts?\n\n` +
 			`Click OK to import all and OVERWRITE duplicates\n` +
 			`Click Cancel to abort import`;
@@ -1886,7 +1682,6 @@ async function handleMasterImport() {
 				reloadPresetOptions('summarize');
 				reloadPresetOptions('query');
 				reloadPresetOptions('timeline_fill');
-				reloadPresetOptions('arc');
 
 				// Refresh UI with new values
 				refreshPromptFields();
@@ -1896,13 +1691,11 @@ async function handleMasterImport() {
 				$('#rmr_summarize_preset').val(settings.current_summarize_preset || '');
 				$('#rmr_query_preset').val(settings.current_query_preset || '');
 				$('#rmr_timeline_fill_preset').val(settings.current_timeline_fill_preset || '');
-				$('#rmr_arc_preset').val(settings.current_arc_preset || '');
 
 				// Update button states
 				updatePresetButtons('summarize', settings.current_summarize_preset);
 				updatePresetButtons('query', settings.current_query_preset);
 				updatePresetButtons('timeline_fill', settings.current_timeline_fill_preset);
-				updatePresetButtons('arc', settings.current_arc_preset);
 
 				toastr.success('Configuration imported successfully.');
 			} catch (error) {
@@ -1926,7 +1719,6 @@ function refreshSettingsUI() {
 	// Checkboxes
 	$('#rmr_tools_enabled').prop('checked', settings.tools_enabled);
 	$('#rmr_loading_screen_enabled').prop('checked', settings.loading_screen_enabled);
-	$('#rmr_shift_enter_hotkey_enabled').prop('checked', settings.shift_enter_hotkey_enabled);
 	// Dropdowns
 	$('#rmr_quick_reply_buttons_location').val(settings.quick_reply_buttons_location || 'send_form');
 	$('#rmr_hide_chapter').prop('checked', settings.hide_chapter);
