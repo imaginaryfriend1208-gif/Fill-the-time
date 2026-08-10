@@ -1769,6 +1769,10 @@ export async function renderSummariesList() {
 
 	chapterMeta.forEach(({ chapter, chapterNum, startMsg, endMsg, tokenCount }) => {
 
+		const mergeButton = chapterNum > 1
+			? `<button type="button" class="menu_button rmr-merge-summary" data-chapter="${chapterNum}" title="Merge with Chapter ${chapterNum - 1} and re-summarize the combined range" data-i18n="rmr_merge_up">Merge ↑</button>`
+			: '';
+
 		const summaryItem = $(`
 			<div class="rmr-summary-item" data-chapter="${chapterNum}">
 				<div class="rmr-summary-header">
@@ -1782,6 +1786,7 @@ export async function renderSummariesList() {
 				<div class="rmr-summary-actions">
 					<button type="button" class="menu_button rmr-remove-summary" data-chapter="${chapterNum}" data-end-msg="${endMsg}" data-i18n="rmr_remove">Remove</button>
 					<button type="button" class="menu_button rmr-resummarize" data-chapter="${chapterNum}" data-i18n="rmr_resummarize">Resummarize</button>
+					${mergeButton}
 					<button type="button" class="menu_button rmr-save-summary" data-chapter="${chapterNum}" disabled>Save</button>
 				</div>
 			</div>
@@ -1875,6 +1880,42 @@ export async function renderSummariesList() {
 		} finally {
 			btn.prop('disabled', false);
 			btn.text(originalText);
+		}
+	});
+
+	// Handle merge button clicks - merge chapter with the previous one
+	container.find('.rmr-merge-summary').on('click', async function () {
+		const btn = $(this);
+		const chapterNum = Number(btn.data('chapter'));
+
+		const confirmed = confirm(
+			`Merge Chapter ${chapterNum} with Chapter ${chapterNum - 1}?\n\n` +
+			`The two chapters will become one covering the full message range, ` +
+			`and the AI will re-summarize the combined content.`
+		);
+		if (!confirmed) return;
+
+		// Disable all merge buttons during the operation
+		container.find('.rmr-merge-summary').prop('disabled', true);
+		const originalText = btn.text();
+		btn.html('<i class="fa-solid fa-spinner fa-spin"></i>');
+
+		try {
+			const { mergeChapterWithPrevious } = await import('./memories.js');
+			const result = await mergeChapterWithPrevious(chapterNum);
+
+			if (result.ok) {
+				await renderSummariesList();
+			} else {
+				toastr.error(result.message, 'Timeline Memory');
+			}
+		} catch (err) {
+			console.error('Chapter merge failed:', err);
+			toastr.error('Chapter merge failed: ' + err.message, 'Timeline Memory');
+			await renderSummariesList();
+		} finally {
+			btn.text(originalText);
+			container.find('.rmr-merge-summary').prop('disabled', false);
 		}
 	});
 

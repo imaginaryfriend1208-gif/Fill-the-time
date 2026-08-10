@@ -2412,6 +2412,74 @@ export async function resummarizeChapter(chapterNumber, options = {}) {
 	return summary;
 }
 
+/**
+ * Merge a chapter with the previous one.
+ * Removes the previous chapter's timeline entry and end marker so this chapter's
+ * effective range extends back to cover both, then re-summarizes the full merged range.
+ * Example: Chapter 1 (0-80) + Chapter 2 (81-150) => single chapter (0-150).
+ * @param {number} chapterNumber - The LATER chapter (must be >= 2); it absorbs the one before it.
+ * @returns {Promise<{ok: boolean, message: string, mergedChapterNumber?: number}>}
+ */
+export async function mergeChapterWithPrevious(chapterNumber, options = {}) {
+	commandArgs = options;
+	loadTimelineData();
+
+	const num = Number(chapterNumber);
+	if (!Number.isInteger(num) || num < 2 || num > timelineData.length) {
+		return { ok: false, message: `Chapter ${chapterNumber} cannot be merged. Pick chapter 2 or later.` };
+	}
+
+	const prevIndex = num - 2;
+	const prevChapter = timelineData[prevIndex];
+	const currentChapter = timelineData[num - 1];
+	const prevSummary = prevChapter.summary || '';
+	const currentSummary = currentChapter.summary || '';
+	const chat = getContext().chat || [];
+
+	// Remove the previous chapter's end marker from the chat message
+	const prevEndMsgId = prevChapter.endMsgId;
+	if (chat[prevEndMsgId]?.extra?.rmr_chapter) {
+		chat[prevEndMsgId].extra.rmr_chapter = false;
+		getContext().saveChat();
+		// Update message button highlight if rendered
+		const button = $(`.mes[mesid="${prevEndMsgId}"] .rmr-button.rmr-chapter-point`);
+		if (button.length) toggleChapterHighlight(button, prevEndMsgId);
+	}
+
+	// Remove the previous chapter entry; the current chapter's effective range
+	// now extends back automatically (ranges derive from the prior chapter's endMsgId)
+	timelineData.splice(prevIndex, 1);
+	// Clear stale manual start boundary so the derived range is used
+	const mergedIndex = num - 2;
+	if (timelineData[mergedIndex]) {
+		timelineData[mergedIndex].startMsgId = prevChapter.startMsgId;
+		delete timelineData[mergedIndex].manual;
+	}
+	saveTimelineData();
+
+	const mergedChapterNumber = num - 1;
+	infoToast(`Merging chapters... re-summarizing the full range.`);
+
+	// Re-summarize the merged range from the raw messages
+	let newSummary = '';
+	try {
+		newSummary = await resummarizeChapter(mergedChapterNumber, options);
+	} catch (err) {
+		debug('Merge re-summarization failed:', err);
+	}
+
+	if (!newSummary || !newSummary.length) {
+		// Fallback: concatenate old summaries so no knowledge is lost
+		timelineData[mergedIndex].summary = `${prevSummary}\n\n${currentSummary}`.trim();
+		saveTimelineData();
+		oopsToast(`Chapters merged, but AI re-summarization failed. Old summaries were joined - use Resummarize to retry.`);
+		return { ok: true, mergedChapterNumber, message: `Merged into Chapter ${mergedChapterNumber} (summaries joined without AI).` };
+	}
+
+	doneToast(`Merged into Chapter ${mergedChapterNumber}.`);
+	return { ok: true, mergedChapterNumber, message: `Merged into Chapter ${mergedChapterNumber}.` };
+}
+
 // Removed lorebook functionality - these functions are no longer needed
 export async function rememberEvent() {
 	oopsToast("Memory events are no longer saved to lorebooks. Chapters are now tracked in the timeline.");
