@@ -459,6 +459,66 @@ export async function acceptRollingSummary(text, endMsgId, archiveOld = true) {
     return true;
 }
 
+export async function autoSplitSummarize(messageId, stages = 1, options = {}) {
+    if (endChapterInProgress) {
+        warningToast('A rolling summary is already being generated.');
+        return false;
+    }
+    endChapterInProgress = true;
+    try {
+        commandArgs = { ...options };
+        const context = getContext();
+        const chat = context.chat || [];
+        const target = Number(messageId);
+        if (!Number.isInteger(target) || target < 0 || target >= chat.length) { errorToast(`Message ID must be between 0 and ${Math.max(0, chat.length - 1)}.`); return false; }
+        const oldEnd = rollingSummary?.endMsgId ?? -1;
+        if (target <= oldEnd) { errorToast(`Choose a message after ${oldEnd}; earlier content is already summarized.`); return false; }
+        await createChatBackup('auto-split rolling summary');
+        const counts = [];
+        for (let index = oldEnd + 1; index <= target; index++) {
+            const message = chat[index];
+            const text = `${message?.name ? `${message.name}: ` : ''}${message?.mes || ''}`;
+            try { counts.push(await context.getTokenCountAsync(text)); } catch { counts.push(Math.ceil(text.length / 4)); }
+        }
+        const total = counts.reduce((sum, value) => sum + value, 0);
+        const maxTokens = Math.max(100, Number(context.maxContext || 4096) - 100);
+        let count = Math.max(0, Number(stages) || 0);
+        if (!count) count = Math.max(1, Math.ceil(total / maxTokens));
+        count = Math.min(count, target - oldEnd);
+        const per = total / count;
+        const cutSet = new Set();
+        let acc = 0;
+        for (let index = 0; index < counts.length && cutSet.size < count - 1; index++) {
+            acc += counts[index];
+            if (acc >= per * (cutSet.size + 1)) cutSet.add(oldEnd + 1 + index);
+        }
+        const cuts = [...cutSet].filter(id => id < target).sort((a, b) => a - b);
+        cuts.push(target);
+        if (cuts.length > 1) infoToast(`Splitting messages ${oldEnd + 1}-${target} (~${total} tokens) into ${cuts.length} stages.`);
+        for (let stage = 0; stage < cuts.length; stage++) {
+            const end = cuts[stage];
+            const isLast = stage === cuts.length - 1;
+            if (cuts.length > 1) infoToast(`Stage ${stage + 1}/${cuts.length}: summarizing through message ${end}...`);
+            let proposal;
+            try { proposal = await generateRollingSummary(end, options); }
+            catch (error) { errorToast(`Stage ${stage + 1} failed: ${error?.message || error}`); debug('Auto-split stage failed:', error); return false; }
+            if (!proposal) { if (cuts.length > 1) warningToast(`Auto-split stopped at stage ${stage + 1}/${cuts.length}. Accepted stages were kept.`); return false; }
+            if (!isLast && options.autoAcceptIntermediate !== false) {
+                if (!await acceptRollingSummary(proposal, end, stage === 0 && settings.archive_on_accept)) { warningToast(`Could not accept stage ${stage + 1}. Stopping.`); return false; }
+            } else {
+                const { openReviewPopup } = await import('./settings.js');
+                const archiveDefault = cuts.length > 1 && stage > 0 ? false : undefined;
+                const accepted = await openReviewPopup(proposal, end, archiveDefault);
+                if (!accepted) { if (!isLast) warningToast('Auto-split cancelled. Accepted stages were kept.'); return false; }
+            }
+        }
+        if (cuts.length > 1) doneToast(`Auto-split complete: ${cuts.length} stages merged into the rolling summary.`);
+        return true;
+    } finally {
+        endChapterInProgress = false;
+    }
+}
+
 export async function endChapter(messageOrId, options = {}) {
     if (endChapterInProgress) {
         warningToast('A rolling summary is already being generated.');

@@ -5,27 +5,44 @@
             <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
         </div>
         <div class="inline-drawer-content">
-            <h4>General</h4>
+            <h4 data-i18n="rmr_general">General</h4>
             <div class="rmr-extension_block flex-container flexGap5">
-                <button type="button" class="menu_button" id="rmr_start_tutorial"><i class="fa-solid fa-graduation-cap"></i> Start Tutorial</button>
-                <button type="button" class="menu_button" id="rmr_master_export"><i class="fa-solid fa-file-export"></i> Export Config</button>
-                <button type="button" class="menu_button" id="rmr_master_import"><i class="fa-solid fa-file-import"></i> Import Config</button>
+                <button type="button" class="menu_button" id="rmr_start_tutorial"><i class="fa-solid fa-graduation-cap"></i> <span data-i18n="rmr_start_tutorial">Start Tutorial</span></button>
+                <button type="button" class="menu_button" id="rmr_master_export"><i class="fa-solid fa-file-export"></i> <span data-i18n="rmr_export_config">Export Config</span></button>
+                <button type="button" class="menu_button" id="rmr_master_import"><i class="fa-solid fa-file-import"></i> <span data-i18n="rmr_import_config">Import Config</span></button>
             </div>
             <hr>
 
-            <h4>Message Button</h4>
+            <h4 data-i18n="rmr_message_button">Message Button</h4>
             <div class="rmr-extension_block">
                 <label class="checkbox_label" for="rmr_chapter_button">
                     <span class="rmr-button fa-solid fa-fw fa-circle-stop"></span>
                     <input id="rmr_chapter_button" class="checkbox" type="checkbox">
-                    <span>Enable rolling-summary button</span>
+                    <span data-i18n="rmr_enable_button">Enable rolling-summary button</span>
                 </label>
             </div>
             <hr>
 
-            <h4><i class="fa-solid fa-book"></i> Rolling Summary</h4>
+            <h4><i class="fa-solid fa-book"></i> <span data-i18n="rmr_rolling_summary">Rolling Summary</span></h4>
+            <div class="rmr-extension_block rmr-manual-chapter">
+                <div class="flex-container marginTopBot5">
+                    <div class="flex-container flex1 flexFlowColumn">
+                        <label for="rmr_create_chapter_end"><small data-i18n="rmr_create_chapter_end">End Message ID (blank = latest)</small></label>
+                        <input class="text_pole widthNatural" id="rmr_create_chapter_end" type="number" min="0" placeholder="latest">
+                    </div>
+                    <div class="flex-container flex1 flexFlowColumn">
+                        <label for="rmr_split_stages"><small data-i18n="rmr_split_stages">Stages (1 = single, 0 = auto by tokens)</small></label>
+                        <input class="text_pole widthNatural" id="rmr_split_stages" type="number" min="0" value="1">
+                    </div>
+                </div>
+                <div class="flex-container flexGap5 marginTopBot5">
+                    <button type="button" class="menu_button" id="rmr_create_chapter"><i class="fa-solid fa-plus"></i> <span data-i18n="rmr_create_chapter">Create Chapter</span></button>
+                    <label class="checkbox_label" for="rmr_auto_accept_stages"><input id="rmr_auto_accept_stages" class="checkbox" type="checkbox" checked><span data-i18n="rmr_auto_accept_stages">Auto-accept intermediate stages (review only the final)</span></label>
+                </div>
+                <p><small data-i18n="rmr_create_chapter_hint">Summarizes from the message after the active summary through the End ID. With 2+ stages, the range is split evenly by tokens and each stage merges into the rolling summary.</small></p>
+            </div>
             <div class="rmr-extension_block"><div id="rmr_active_summary_container" class="rmr-summaries-container"></div></div>
-            <h4><i class="fa-solid fa-box-archive"></i> Archive for this chat</h4>
+            <h4><i class="fa-solid fa-box-archive"></i> <span data-i18n="rmr_archive_for_chat">Archive for this chat</span></h4>
             <div class="rmr-extension_block"><div id="rmr_archive_container" class="rmr-archive-container"></div></div>
 
             <div id="rmr_summary_popup" class="rmr-summary-popup-overlay" style="display:none">
@@ -37,63 +54,63 @@
                     </div>
                     <div class="rmr-summary-popup-body"><textarea id="rmr_popup_textarea" class="rmr-summary-popup-textarea text_pole" placeholder="Summary..."></textarea></div>
                     <div class="rmr-summary-popup-footer">
-                        <label id="rmr_popup_archive_wrap" class="checkbox_label"><input id="rmr_popup_archive_old" class="checkbox" type="checkbox"> Archive previous summary</label>
+                        <label id="rmr_popup_archive_wrap" class="checkbox_label"><input id="rmr_popup_archive_old" class="checkbox" type="checkbox"> <span data-i18n="rmr_archive_previous">Archive previous summary</span></label>
                         <div class="rmr-summary-popup-spacer"></div>
-                        <button type="button" class="menu_button" id="rmr_popup_resummarize">Re-summarize</button>
-                        <button type="button" class="menu_button" id="rmr_popup_cancel">Cancel</button>
-                        <button type="button" class="menu_button" id="rmr_popup_save">Accept</button>
+                        <button type="button" class="menu_button" id="rmr_popup_resummarize" data-i18n="rmr_resummarize">Re-summarize</button>
+                        <button type="button" class="menu_button" id="rmr_popup_cancel" data-i18n="rmr_cancel">Cancel</button>
+                        <button type="button" class="menu_button" id="rmr_popup_save" data-i18n="rmr_accept">Accept</button>
                     </div>
                 </div>
             </div>
             <hr>
 
-            <h4>Summarization Connection</h4>
+            <h4 data-i18n="rmr_summarization_connection">Summarization Connection</h4>
             <div class="rmr-extension_block flex-container marginTopBot5">
-                <div class="flex-container flex1 flexFlowColumn"><label for="rmr_profile"><small>Connection Profile</small></label><select class="text_pole widthNatural" id="rmr_profile"><option value="">-- No Override --</option></select></div>
-                <div class="flex-container flex1 flexFlowColumn"><label for="rmr_rate_limit"><small>Max Requests per Minute (0 = unlimited)</small></label><input class="text_pole widthNatural" id="rmr_rate_limit" type="number" min="0"></div>
+                <div class="flex-container flex1 flexFlowColumn"><label for="rmr_profile"><small data-i18n="rmr_connection_profile">Connection Profile</small></label><select class="text_pole widthNatural" id="rmr_profile"><option value="" data-i18n="rmr_no_override">-- No Override --</option></select></div>
+                <div class="flex-container flex1 flexFlowColumn"><label for="rmr_rate_limit"><small data-i18n="rmr_rate_limit">Max Requests per Minute (0 = unlimited)</small></label><input class="text_pole widthNatural" id="rmr_rate_limit" type="number" min="0"></div>
             </div>
             <hr>
 
-            <h4>Summarization Preset</h4>
+            <h4 data-i18n="rmr_summarization_preset">Summarization Preset</h4>
             <div class="rmr-extension_block">
-                <select class="text_pole" id="rmr_summarize_preset"><option value="">-- Custom --</option></select>
+                <select class="text_pole" id="rmr_summarize_preset"><option value="" data-i18n="rmr_custom_preset">-- Custom --</option></select>
                 <div class="preset-buttons">
-                    <button type="button" class="menu_button" id="rmr_save_summarize_preset">Save New</button>
-                    <button type="button" class="menu_button" id="rmr_update_summarize_preset">Update</button>
-                    <button type="button" class="menu_button" id="rmr_delete_summarize_preset">Delete</button>
-                    <button type="button" class="menu_button" id="rmr_export_summarize_preset">Export</button>
-                    <button type="button" class="menu_button" id="rmr_import_summarize_preset">Import</button>
+                    <button type="button" class="menu_button" id="rmr_save_summarize_preset" data-i18n="rmr_preset_save_new">Save New</button>
+                    <button type="button" class="menu_button" id="rmr_update_summarize_preset" data-i18n="rmr_preset_update">Update</button>
+                    <button type="button" class="menu_button" id="rmr_delete_summarize_preset" data-i18n="rmr_preset_delete">Delete</button>
+                    <button type="button" class="menu_button" id="rmr_export_summarize_preset" data-i18n="rmr_preset_export">Export</button>
+                    <button type="button" class="menu_button" id="rmr_import_summarize_preset" data-i18n="rmr_preset_import">Import</button>
                 </div>
             </div>
             <hr>
 
-            <h4>Summarization Prompts</h4>
+            <h4 data-i18n="rmr_summarization_prompts">Summarization Prompts</h4>
             <div class="rmr-extension_block flex-container flexFlowColumn">
-                <label for="rmr_memory_system_prompt"><small>System Prompt</small></label>
+                <label for="rmr_memory_system_prompt"><small data-i18n="rmr_system_prompt">System Prompt</small></label>
                 <textarea rows="5" class="margin0 text_pole textarea_compact" id="rmr_memory_system_prompt"></textarea>
-                <label for="rmr_memory_prompt_template"><small>User Prompt — supports {{previousSummary}} and {{content}}</small></label>
+                <label for="rmr_memory_prompt_template"><small data-i18n="rmr_user_prompt">User Prompt — supports {{previousSummary}} and {{content}}</small></label>
                 <textarea rows="8" class="margin0 text_pole textarea_compact" id="rmr_memory_prompt_template"></textarea>
             </div>
             <hr>
 
-            <h4>Summary Behavior</h4>
+            <h4 data-i18n="rmr_summary_behavior">Summary Behavior</h4>
             <div class="rmr-extension_block">
-                <label class="checkbox_label" for="rmr_hide_chapter"><input id="rmr_hide_chapter" class="checkbox" type="checkbox"><span>Hide messages after accepting their summary</span></label>
-                <label class="checkbox_label" for="rmr_archive_on_accept"><input id="rmr_archive_on_accept" class="checkbox" type="checkbox"><span>Archive the previous summary by default</span></label>
-                <label class="checkbox_label" for="rmr_add_chunk_summaries"><input id="rmr_add_chunk_summaries" class="checkbox" type="checkbox"><span>Add chunk summaries as a chat comment</span></label>
-                <label class="checkbox_label" for="rmr_use_chunk_summaries_as_chapter"><input id="rmr_use_chunk_summaries_as_chapter" class="checkbox" type="checkbox"><span>Use chunk summaries directly as final summary</span></label>
+                <label class="checkbox_label" for="rmr_hide_chapter"><input id="rmr_hide_chapter" class="checkbox" type="checkbox"><span data-i18n="rmr_hide_chapter">Hide messages after accepting their summary</span></label>
+                <label class="checkbox_label" for="rmr_archive_on_accept"><input id="rmr_archive_on_accept" class="checkbox" type="checkbox"><span data-i18n="rmr_archive_on_accept">Archive the previous summary by default</span></label>
+                <label class="checkbox_label" for="rmr_add_chunk_summaries"><input id="rmr_add_chunk_summaries" class="checkbox" type="checkbox"><span data-i18n="rmr_add_chunk_summaries">Add chunk summaries as a chat comment</span></label>
+                <label class="checkbox_label" for="rmr_use_chunk_summaries_as_chapter"><input id="rmr_use_chunk_summaries_as_chapter" class="checkbox" type="checkbox"><span data-i18n="rmr_use_chunk_summaries">Use chunk summaries directly as final summary</span></label>
             </div>
             <hr>
 
-            <h4>Optional Inject at Depth</h4>
+            <h4 data-i18n="rmr_inject_heading">Optional Inject at Depth</h4>
             <div class="rmr-extension_block">
-                <p><small>Normally, put <code>{{fillthetime}}</code> in a Prompt Manager entry. Enable this only if you prefer automatic depth injection.</small></p>
-                <label class="checkbox_label" for="rmr_inject_enabled"><input id="rmr_inject_enabled" class="checkbox" type="checkbox"><span>Enable automatic summary injection</span></label>
+                <p><small data-i18n="rmr_inject_hint">Normally, put {{fillthetime}} in a Prompt Manager entry. Enable this only if you prefer automatic depth injection.</small></p>
+                <label class="checkbox_label" for="rmr_inject_enabled"><input id="rmr_inject_enabled" class="checkbox" type="checkbox"><span data-i18n="rmr_inject_enabled">Enable automatic summary injection</span></label>
                 <div class="flex-container marginTopBot5">
-                    <div class="flex-container flex1 flexFlowColumn"><label for="rmr_inject_depth"><small>Depth</small></label><input class="text_pole" id="rmr_inject_depth" type="number" min="0" max="999"></div>
-                    <div class="flex-container flex1 flexFlowColumn"><label for="rmr_inject_role"><small>Role</small></label><select class="text_pole" id="rmr_inject_role"></select></div>
+                    <div class="flex-container flex1 flexFlowColumn"><label for="rmr_inject_depth"><small data-i18n="rmr_inject_depth">Depth</small></label><input class="text_pole" id="rmr_inject_depth" type="number" min="0" max="999"></div>
+                    <div class="flex-container flex1 flexFlowColumn"><label for="rmr_inject_role"><small data-i18n="rmr_inject_role">Role</small></label><select class="text_pole" id="rmr_inject_role"></select></div>
                 </div>
-                <label for="rmr_inject_prompt"><small>Injection Prompt — supports {{fillthetime}}, {{lastMessageId}}, {{firstIncludedMessageId}}</small></label>
+                <label for="rmr_inject_prompt"><small data-i18n="rmr_inject_prompt">Injection Prompt — supports {{fillthetime}}, {{lastMessageId}}, {{firstIncludedMessageId}}</small></label>
                 <textarea rows="7" class="margin0 text_pole textarea_compact" id="rmr_inject_prompt"></textarea>
             </div>
         </div>
