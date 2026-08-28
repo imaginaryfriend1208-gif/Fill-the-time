@@ -1,4 +1,5 @@
 import { getCurrentLocale } from '../../../../../scripts/i18n.js';
+import { getExtensionAssetPath } from '../index.js';
 
 const AVAILABLE_LOCALES = [
     { code: 'auto', name: 'Auto (SillyTavern)' },
@@ -25,7 +26,7 @@ async function fetchLocale(locale) {
     }
     for (const variant of variantsFor(currentLocale)) {
         try {
-            const response = await fetch(`/scripts/extensions/third-party/fill-the-time/locales/${variant}.json`);
+            const response = await fetch(getExtensionAssetPath(`locales/${variant}.json`));
             if (response.ok) {
                 translations = await response.json();
                 return translations;
