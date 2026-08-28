@@ -153,8 +153,8 @@ async function loadUI() {
     for (const [name, role] of Object.entries(extension_prompt_roles)) roles.append($('<option>').val(role).text(name[0] + name.slice(1).toLowerCase()));
     roles.val(settings.inject_role).off('change').on('change', async function () { settings.inject_role = Number(this.value); save(); await updateInjection(); });
     $('#rmr_inject_prompt').off('change').on('change', async function () { settings.inject_prompt = this.value || INJECT_PROMPT; save(); await updateInjection(); });
-    $('#rmr_memory_system_prompt').off('change').on('change', function () { settings.memory_system_prompt = this.value || SYSTEM_PROMPT; settings.current_summarize_preset = null; save(); presetUI(); });
-    $('#rmr_memory_prompt_template').off('change').on('change', function () { settings.memory_prompt_template = this.value || USER_PROMPT; settings.current_summarize_preset = null; save(); presetUI(); });
+    $('#rmr_memory_system_prompt').off('change').on('change', function () { settings.memory_system_prompt = this.value || SYSTEM_PROMPT; save(); presetUI(); });
+    $('#rmr_memory_prompt_template').off('change').on('change', function () { settings.memory_prompt_template = this.value || USER_PROMPT; save(); presetUI(); });
     $('#rmr_create_chapter').off('click').on('click', async function () {
         const button = $(this);
         if (button.prop('disabled')) return;
@@ -177,7 +177,9 @@ async function loadUI() {
 const presetById = id => settings.summarize_presets.find(item => item.id === id);
 function presetUI() {
     const select = $('#rmr_summarize_preset'); select.find('option:not([value=""])').remove();
-    for (const preset of settings.summarize_presets) select.append($('<option>').val(preset.id).text(preset.name));
+    const current = presetById(settings.current_summarize_preset);
+    const dirty = current && (current.systemPrompt !== settings.memory_system_prompt || current.userPrompt !== settings.memory_prompt_template);
+    for (const preset of settings.summarize_presets) select.append($('<option>').val(preset.id).text(preset.id === current?.id && dirty ? `${preset.name} *` : preset.name));
     select.val(settings.current_summarize_preset || '');
     $('#rmr_update_summarize_preset,#rmr_delete_summarize_preset,#rmr_export_summarize_preset').prop('disabled', !settings.current_summarize_preset);
 }
@@ -192,7 +194,7 @@ function bindPresets() {
     presetUI();
     $('#rmr_summarize_preset').off('change').on('change', function () { if (this.value) applyPreset(this.value); else { settings.current_summarize_preset = null; save(); } presetUI(); });
     $('#rmr_save_summarize_preset').off('click').on('click', () => { const name = prompt('Preset name:'); if (!name?.trim()) return; const duplicate = settings.summarize_presets.find(item => item.name.toLowerCase() === name.trim().toLowerCase()); if (duplicate && !confirm(`Overwrite "${duplicate.name}"?`)) return; const preset = snapshot(name.trim()); if (duplicate) Object.assign(duplicate, preset, {id:duplicate.id}); else settings.summarize_presets.push(preset); settings.current_summarize_preset = duplicate?.id || preset.id; save(); presetUI(); });
-    $('#rmr_update_summarize_preset').off('click').on('click', () => { const preset = presetById(settings.current_summarize_preset); if (!preset) return; Object.assign(preset, snapshot(preset.name), {id:preset.id}); save(); toastr.success('Preset updated.','Fill the Time'); });
+    $('#rmr_update_summarize_preset').off('click').on('click', () => { const preset = presetById(settings.current_summarize_preset); if (!preset) return; Object.assign(preset, snapshot(preset.name), {id:preset.id}); save(); presetUI(); toastr.success('Preset updated.','Fill the Time'); });
     $('#rmr_delete_summarize_preset').off('click').on('click', () => { const preset = presetById(settings.current_summarize_preset); if (!preset || !confirm(`Delete "${preset.name}"?`)) return; settings.summarize_presets = settings.summarize_presets.filter(item => item.id !== preset.id); settings.current_summarize_preset = null; save(); presetUI(); });
     $('#rmr_export_summarize_preset').off('click').on('click', () => { const preset = presetById(settings.current_summarize_preset); if (preset) download(`${preset.name}.json`, {version:'3.0',type:'summarize',preset}); });
     $('#rmr_import_summarize_preset').off('click').on('click', () => choose(data => { if (data.type !== 'summarize' || !data.preset?.name || !data.preset?.userPrompt) throw new Error('Invalid summarize preset.'); const preset = {...data.preset,id:`preset-${Date.now()}`}; if (/{{timeline}}/i.test(preset.userPrompt)) preset.userPrompt = USER_PROMPT; settings.summarize_presets.push(preset); settings.current_summarize_preset = preset.id; save(); applyPreset(preset.id); presetUI(); }));
