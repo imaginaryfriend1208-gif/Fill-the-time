@@ -35,7 +35,14 @@ const DIARY_USER_PROMPT = `<previous_diary>
 {{content}}
 </new_events>
 
-Merge the previous diary and the new events into ONE updated diary following your role and format. If the previous diary is empty, start the diary from the new events. Keep every dated entry and every (REMEMBER: ...) note that is still valid. Return one plaintext block without markdown.
+Merge the previous diary and the new events into ONE updated diary following your role and format. If the previous diary is empty, start the diary from the new events.
+
+Merge rules:
+- Keep every dated entry and every (REMEMBER: ...) note that is still valid.
+- Note in detail what got DONE in the previous chapters (tasks finished, promises kept, problems solved) and what is still HANGING (unfinished tasks, promises not yet kept, questions with no answer yet). Carry every hanging item forward so nothing is silently dropped.
+- Never delete old memories. When compressing older entries, retell them in the diarist's own narrating voice, as someone looking back on things that already happened (e.g. "back then we...", "that was the day..."), keeping the facts, dates, and feelings intact while shortening the wording.
+
+Return one plaintext block without markdown.
 
 The updated diary is:`;
 const WRITER_DIARY_SYSTEM = `<role>You are the story's writer, keeping a private development diary about an ongoing story. You write in third person limited: every event is recorded strictly through what each character personally knows, saw, or believes at that time. Never leak one character's secret knowledge into another character's understanding.</role>
