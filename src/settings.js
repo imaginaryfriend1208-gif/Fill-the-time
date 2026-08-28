@@ -42,19 +42,19 @@ const WRITER_DIARY_SYSTEM = `<role>You are the story's writer, keeping a private
 <task>Merge the previous diary and the newest events into ONE updated development diary, written in the same language the story is written in.</task>
 <format>
 Write the diary with these sections:
-[CHRONICLE] Dated diary entries of ALL events so far, oldest first. Whenever the story states or implies a date, time, day of week, season, or elapsed time, record it explicitly (e.g. "Day 12 — evening", "Sunday, March 3rd"). Mark anniversaries, birthdays, promises, and memorable firsts with (REMEMBER: ...) so they can be celebrated or called back later. Compress older entries more than recent ones, but never delete a recorded event or a REMEMBER note unless newer events supersede them.
+[CHRONICLE] Dated diary entries of ALL events so far, oldest first. Whenever the story states or implies a date, time, day of week, season, or elapsed time, record it explicitly (e.g. "Day 12, evening", "Sunday, March 3rd"). Mark anniversaries, birthdays, promises, and memorable firsts with (REMEMBER: ...) so they can be celebrated or called back later. You may add short asides in parentheses, like (NOTE: ...) for writer observations about a character or (PLAN: ...) for ideas on where to take them. Compress older entries more than recent ones, but never delete a recorded event or a REMEMBER note unless newer events supersede them.
 [WHO KNOWS WHAT] For each major character: what they currently know, believe (possibly wrongly), and still do not know.
 [OPEN THREADS & PLAN] Every unresolved or open thread: what was set up, what is still owed to the reader, and a short concrete plan for how it could be developed or paid off later.
 </format>
-<instructions>Preserve critical plot developments, character changes, relationships, resolved conflicts, and unresolved threads. Exclude minor description and dialogue excerpts. Return plain unformatted text only, no markdown.</instructions>`;
+<instructions>Preserve critical plot developments, character changes, relationships, resolved conflicts, and unresolved threads. Exclude minor description and dialogue excerpts. Write in plain everyday language, like quick working notes, not literary or flowery prose. Never use em dashes or en dashes in any form (—, –, or --); use commas, periods, or parentheses instead. Return plain unformatted text only, no markdown.</instructions>`;
 const CHARACTER_DIARY_SYSTEM = `<role>You are {{char}}, privately writing in your personal diary at the end of the most recent scene. Write in first person, in {{char}}'s authentic voice, in the same language the story is written in. You only know what {{char}} personally witnessed, was told, or believes — you may be wrong about things, and you must not mention anything {{char}} could not know.</role>
 <task>Rewrite your diary by merging the previous diary with what just happened, into ONE updated diary.</task>
 <format>
-Write dated diary entries, oldest first. Whenever you know a date, time, day of week, or how much time has passed, write it down (e.g. "Day 12 — evening", "Sunday, March 3rd"). Mark anniversaries, birthdays, promises, and memorable firsts with (REMEMBER: ...) so future-you can celebrate or bring them up again. For each entry, record not only what happened but where you were, the atmosphere, and honestly how you felt in that moment — your emotions, doubts, hopes, and what you privately think of the people involved.
+Write dated diary entries, oldest first. Whenever you know a date, time, day of week, or how much time has passed, write it down (e.g. "Day 12, evening", "Sunday, March 3rd"). Mark anniversaries, birthdays, promises, and memorable firsts with (REMEMBER: ...) so future-you can celebrate or bring them up again. For each entry, record not only what happened but where you were, the atmosphere, and honestly how you felt in that moment: your emotions, doubts, hopes, and what you privately think of the people involved. You may add little personal asides in parentheses, like (note to self: ...) or (plan: ...), the way people scribble in real diaries.
 End the diary with a short "Things still on my mind" section: unfinished business, unanswered questions, promises to keep, and what you intend to do next.
 Compress older entries more than recent ones, but never delete a recorded event or a REMEMBER note unless newer events change their meaning.
 </format>
-<instructions>Stay strictly in {{char}}'s limited point of view and voice. Return plain unformatted text only, no markdown.</instructions>`;
+<instructions>Stay strictly in {{char}}'s limited point of view and voice. Write in plain everyday language, the way a real person writes in a private diary, not literary or flowery prose. Never use em dashes or en dashes in any form (—, –, or --); use commas, periods, or parentheses instead. Return plain unformatted text only, no markdown.</instructions>`;
 const DEFAULT_PRESET = { id: 'preset-default-summarize', name: 'Rolling Summary', systemPrompt: SYSTEM_PROMPT, userPrompt: USER_PROMPT, profile: null, rateLimit: 0 };
 const WRITER_DIARY_PRESET = { id: 'preset-writer-diary', name: "Writer's Diary (3rd person limited)", systemPrompt: WRITER_DIARY_SYSTEM, userPrompt: DIARY_USER_PROMPT, profile: null, rateLimit: 0 };
 const CHARACTER_DIARY_PRESET = { id: 'preset-character-diary', name: "Character's Diary (1st person)", systemPrompt: CHARACTER_DIARY_SYSTEM, userPrompt: DIARY_USER_PROMPT, profile: null, rateLimit: 0 };
@@ -85,7 +85,11 @@ function migrate(value) {
     for (const [key, fallback] of Object.entries(defaults)) if (value[key] == null || value[key] === 'undefined') { value[key] = clone(fallback); changed = true; }
     value.show_buttons = Array.isArray(value.show_buttons) ? value.show_buttons.filter(item => item === Buttons.STOP) : [Buttons.STOP];
     if (!Array.isArray(value.summarize_presets) || !value.summarize_presets.length) value.summarize_presets = [clone(DEFAULT_PRESET)];
-    for (const builtin of [WRITER_DIARY_PRESET, CHARACTER_DIARY_PRESET]) if (!value.summarize_presets.some(preset => preset?.id === builtin.id)) { value.summarize_presets.push(clone(builtin)); changed = true; }
+    for (const builtin of [WRITER_DIARY_PRESET, CHARACTER_DIARY_PRESET]) {
+        const existing = value.summarize_presets.find(preset => preset?.id === builtin.id);
+        if (!existing) { value.summarize_presets.push(clone(builtin)); changed = true; }
+        else if (existing.systemPrompt !== builtin.systemPrompt || existing.userPrompt !== builtin.userPrompt) { existing.systemPrompt = builtin.systemPrompt; existing.userPrompt = builtin.userPrompt; changed = true; }
+    }
     return changed;
 }
 
