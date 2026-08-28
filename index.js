@@ -3,7 +3,6 @@ import { loadSlashCommands } from './src/commands.js';
 import { addMessageButtons, resetMessageButtons } from './src/messages.js';
 import { loadSettings, changeCharaName, renderActiveSummary, renderArchiveList } from './src/settings.js';
 import { initFillTheTimeMacros, loadRollingSummaryData, updateSummaryInjection } from './src/memories.js';
-import { loadUITranslations } from './src/locales.js';
 
 export const extension_name = 'fill-the-time';
 const extensionBasePath = new URL('.', import.meta.url).pathname.replace(/\/$/, '');
@@ -18,7 +17,6 @@ jQuery(()=>{
     eventSource.on(event_types.APP_READY,async()=>{
         STVersion=await (await fetch('/version')).json();
         if(!compatible(STVersion)){toastr.error('Please update SillyTavern to 1.13 or newer.','Fill the Time');throw new Error('Fill the Time requires SillyTavern 1.13+');}
-        await loadUITranslations();
         await loadSettings();
         initFillTheTimeMacros();
         loadSlashCommands();

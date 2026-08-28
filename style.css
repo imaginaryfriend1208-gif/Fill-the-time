@@ -1,4 +1,14 @@
 .rmr-chapter-point { color: var(--SmartThemeEmColor); opacity: .65; }
+.rmr-drawer-header { gap:8px; }
+.rmr-title-group { display:flex; align-items:center; gap:7px; flex:1; min-width:0; }
+.rmr-version-badge { padding:2px 7px; border:1px solid var(--SmartThemeBorderColor); border-radius:999px; color:var(--SmartThemeQuoteColor); font:600 10px/1.4 monospace; }
+.rmr-toolbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin:5px 0 12px; padding:9px; border:1px solid var(--SmartThemeBorderColor); border-radius:8px; background:var(--SmartThemeBlurTintColor); }
+.rmr-language-control { display:flex; align-items:center; gap:7px; }
+.rmr-language-control select { min-width:150px; }
+.rmr-preset-guide { margin-top:10px; padding:8px 10px; border-left:3px solid var(--SmartThemeEmColor); background:var(--SmartThemeBlurTintColor); }
+.rmr-preset-guide summary { cursor:pointer; color:var(--SmartThemeEmColor); font-weight:600; }
+.rmr-preset-guide p { margin:8px 0 0; line-height:1.45; }
+.rmr-regenerate-active i { margin-right:4px; }
 .rmr-summaries-container,.rmr-archive-container { display:flex; flex-direction:column; gap:8px; max-height:420px; overflow:auto; }
 .rmr-summaries-empty { color:var(--SmartThemeQuoteColor); font-style:italic; padding:10px; text-align:center; }
 .rmr-summary-item,.rmr-archive-item { border:1px solid var(--SmartThemeBorderColor); border-radius:6px; padding:10px; background:var(--SmartThemeBlurTintColor); }
@@ -27,4 +37,4 @@
 .rmr-tutorial-footer { display:flex; justify-content:space-between; gap:8px; padding:10px; border-top:1px solid var(--SmartThemeBorderColor); }
 .rmr-tutorial-close { background:none; border:0; color:inherit; cursor:pointer; }
 .rmr-tutorial-highlight { outline:3px solid var(--SmartThemeEmColor) !important; outline-offset:3px; }
-@media(max-width:700px){.rmr-summary-popup{width:96vw}.rmr-summary-popup-footer{align-items:stretch}.rmr-summary-popup-footer .menu_button{flex:1}.rmr-choice-actions{flex-direction:column}}
+@media(max-width:700px){.rmr-toolbar,.rmr-language-control{align-items:stretch;flex-direction:column}.rmr-toolbar .menu_button,.rmr-language-control select{width:100%}.rmr-summary-popup{width:96vw}.rmr-summary-popup-footer{align-items:stretch}.rmr-summary-popup-footer .menu_button{flex:1}.rmr-choice-actions{flex-direction:column}}

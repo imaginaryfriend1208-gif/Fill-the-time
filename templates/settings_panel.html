@@ -1,10 +1,14 @@
 <div id="rmr_settings_root" class="rmr-extension-settings">
     <div class="inline-drawer">
-        <div class="inline-drawer-toggle inline-drawer-header">
-            <b data-i18n="rmr_extension_name">Fill the Time</b>
+        <div class="inline-drawer-toggle inline-drawer-header rmr-drawer-header">
+            <span class="rmr-title-group"><b data-i18n="rmr_extension_name">Fill the Time</b><span id="rmr_version_badge" class="rmr-version-badge" hidden></span></span>
             <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
         </div>
         <div class="inline-drawer-content">
+            <div class="rmr-toolbar">
+                <label class="rmr-language-control" for="rmr_language_select"><i class="fa-solid fa-language"></i><span data-i18n="rmr_language">Language</span><select id="rmr_language_select" class="text_pole widthNatural"></select></label>
+                <button type="button" class="menu_button" id="rmr_open_help"><i class="fa-solid fa-circle-question"></i> <span data-i18n="rmr_help">Help</span></button>
+            </div>
             <h4 data-i18n="rmr_general">General</h4>
             <div class="rmr-extension_block flex-container flexGap5">
                 <button type="button" class="menu_button" id="rmr_start_tutorial"><i class="fa-solid fa-graduation-cap"></i> <span data-i18n="rmr_start_tutorial">Start Tutorial</span></button>
@@ -81,6 +85,7 @@
                     <button type="button" class="menu_button" id="rmr_export_summarize_preset" data-i18n="rmr_preset_export">Export</button>
                     <button type="button" class="menu_button" id="rmr_import_summarize_preset" data-i18n="rmr_preset_import">Import</button>
                 </div>
+                <details class="rmr-preset-guide"><summary data-i18n="rmr_preset_guide_title">How to create a prompt preset</summary><p data-i18n="rmr_preset_guide_body">Edit the System and User prompts below, keep {{previousSummary}} and {{content}} in the User prompt, then choose Save New. Update overwrites the selected preset; Export and Import share presets as JSON.</p></details>
             </div>
             <hr>
 

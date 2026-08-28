@@ -19,6 +19,7 @@ let commandArgs = {};
 let lastGenerationTimestamp = 0;
 let endChapterInProgress = false;
 const draftBases = new Map();
+const regenerationBases = new Map();
 const pendingChunkComments = new Map();
 
 const infoToast = text => { if (!commandArgs?.quiet) toastr.info(text, 'Fill the Time'); };
@@ -79,6 +80,7 @@ export const getArchiveEntries = () => clone(archiveEntries);
 
 export async function loadRollingSummaryData() {
     draftBases.clear();
+    regenerationBases.clear();
     pendingChunkComments.clear();
     const context = getContext();
     context.chatMetadata ||= {};
@@ -187,6 +189,7 @@ export async function clearRollingSummary() {
     const oldEnd = rollingSummary?.endMsgId;
     rollingSummary = null;
     draftBases.clear();
+    regenerationBases.clear();
     pendingChunkComments.clear();
     clearMarkers();
     if (Number.isInteger(oldEnd)) unhideRange(0, oldEnd);
@@ -291,15 +294,16 @@ async function saveCheckpoint(value) {
     context.chatMetadata[PENDING_KEY] = { ...value, updatedAt: new Date().toISOString() };
     await context.saveMetadata();
 }
-async function clearCheckpoint(target = null) {
+async function clearCheckpoint(target = null, checkpointType = null) {
     const context = getContext();
     const pending = context.chatMetadata?.[PENDING_KEY];
-    if (!pending || (target !== null && Number(pending.targetMessageId) !== Number(target))) return;
+    const pendingType = pending?.checkpointType || 'forward';
+    if (!pending || (target !== null && Number(pending.targetMessageId) !== Number(target)) || (checkpointType && pendingType !== checkpointType)) return;
     delete context.chatMetadata[PENDING_KEY];
     await context.saveMetadata();
 }
 
-async function processRange(start, end) {
+async function processRange(start, end, { includeHidden = false } = {}) {
     const context = getContext();
     const chat = context.chat || [];
     const length = chat.length;
@@ -309,10 +313,10 @@ async function processRange(start, end) {
         const mes = message.is_system ? message.mes : getRegexedString(message.mes, placement, { isPrompt: true, depth: Math.max(0, length - index - 1) });
         return { ...message, mes, index };
     }));
-    return processed.filter(message => !message.is_system);
+    return processed.filter(message => includeHidden || !message.is_system);
 }
 
-async function generateFromText(content, chunk = 0, includePrevious = true) {
+async function generateFromText(content, chunk = 0, includePrevious = true, previousOverride = null) {
     const rate = Number(settings.rate_limit) || 0;
     const delay = rate > 0 ? Math.max(500, 60000 / rate) : 0;
     const remaining = delay - (Date.now() - lastGenerationTimestamp);
@@ -322,7 +326,7 @@ async function generateFromText(content, chunk = 0, includePrevious = true) {
     isInternalGeneration = true;
     try {
         const context = getContext();
-        const previous = includePrevious ? (rollingSummary?.summary || '') : '';
+        const previous = includePrevious ? (previousOverride ?? rollingSummary?.summary ?? '') : '';
         let userPrompt = String(settings.memory_prompt_template || '').replace(/{{content}}/gi, String(content || '').trim()).replace(/{{previousSummary}}/gi, previous);
         let systemPrompt = String(settings.memory_system_prompt || '').replace(/{{content}}/gi, String(content || '').trim()).replace(/{{previousSummary}}/gi, previous);
         userPrompt = context.substituteParams(userPrompt, context.name1, context.name2);
@@ -343,7 +347,7 @@ async function generateFromText(content, chunk = 0, includePrevious = true) {
     } finally { isInternalGeneration = false; }
 }
 
-async function summarizeHistory(history, target) {
+async function summarizeHistory(history, target, options = {}) {
     if (!history.length) { warningToast('No visible content to summarize.'); return ''; }
     const context = getContext();
     const maxTokens = Math.max(100, Number(context.maxContext || 4096) - 100);
@@ -361,8 +365,11 @@ async function summarizeHistory(history, target) {
     if (current) chunks.push(current);
     if (!chunks.length) return '';
     const start = history[0].index ?? 0;
-    const pending = pendingCheckpoint();
-    let summaries = pending && Number(pending.startMsgId) === start && Number(pending.targetMessageId) === target && Number(pending.chunkCount) === chunks.length && Array.isArray(pending.chunkSummaries) ? [...pending.chunkSummaries] : [];
+    const persistCheckpoint = options.persistCheckpoint !== false;
+    const pending = persistCheckpoint ? pendingCheckpoint() : null;
+    const checkpointType = options.checkpointType || 'forward';
+    const pendingType = pending?.checkpointType || 'forward';
+    let summaries = pending && pendingType === checkpointType && Number(pending.startMsgId) === start && Number(pending.targetMessageId) === target && Number(pending.chunkCount) === chunks.length && Array.isArray(pending.chunkSummaries) ? [...pending.chunkSummaries] : [];
     if (summaries.length) infoToast(`Resuming from chunk ${summaries.length + 1}/${chunks.length}.`);
     if (chunks.length > 1) {
         while (summaries.length < chunks.length) {
@@ -371,10 +378,10 @@ async function summarizeHistory(history, target) {
                 const result = await generateFromText(chunks[index], index + 1, false);
                 if (!result) throw new Error('Empty chunk summary');
                 summaries.push(result);
-                await saveCheckpoint({ targetMessageId: target, startMsgId: start, chunkCount: chunks.length, chunkSummaries: summaries, stage: 'chunks' });
+                if (persistCheckpoint) await saveCheckpoint({ checkpointType, targetMessageId: target, startMsgId: start, chunkCount: chunks.length, chunkSummaries: summaries, stage: 'chunks' });
             } catch (error) {
-                await saveCheckpoint({ targetMessageId: target, startMsgId: start, chunkCount: chunks.length, chunkSummaries: summaries, stage: 'chunk', failedChunkIndex: index, error: error?.message || String(error) });
-                errorToast(`Summary failed at chunk ${index + 1}/${chunks.length}. Progress was saved.`);
+                if (persistCheckpoint) await saveCheckpoint({ checkpointType, targetMessageId: target, startMsgId: start, chunkCount: chunks.length, chunkSummaries: summaries, stage: 'chunk', failedChunkIndex: index, error: error?.message || String(error) });
+                errorToast(persistCheckpoint ? `Summary failed at chunk ${index + 1}/${chunks.length}. Progress was saved.` : `Summary failed at chunk ${index + 1}/${chunks.length}.`);
                 return '';
             }
         }
@@ -383,20 +390,19 @@ async function summarizeHistory(history, target) {
     let result;
     try {
         if (chunks.length > 1 && settings.use_chunk_summaries_as_chapter) {
-            result = rollingSummary?.summary
-                ? `${rollingSummary.summary}\n\n${combined}`.trim()
-                : combined;
+            const previous = options.previousSummary ?? rollingSummary?.summary ?? '';
+            result = previous ? `${previous}\n\n${combined}`.trim() : combined;
         } else {
-            result = await generateFromText(combined);
+            result = await generateFromText(combined, 0, true, options.previousSummary);
         }
     }
     catch (error) {
-        await saveCheckpoint({ targetMessageId: target, startMsgId: start, chunkCount: chunks.length, chunkSummaries: summaries, stage: 'final', error: error?.message || String(error) });
-        errorToast('Final summary failed. Chunk progress was saved.');
+        if (persistCheckpoint) await saveCheckpoint({ checkpointType, targetMessageId: target, startMsgId: start, chunkCount: chunks.length, chunkSummaries: summaries, stage: 'final', error: error?.message || String(error) });
+        errorToast(persistCheckpoint ? 'Final summary failed. Chunk progress was saved.' : 'Final summary failed.');
         return '';
     }
     result = String(result || '').trim();
-    if (result && chunks.length > 1 && settings.add_chunk_summaries) {
+    if (result && chunks.length > 1 && settings.add_chunk_summaries && options.addChunkComment !== false) {
         pendingChunkComments.set(target, combined);
     } else {
         pendingChunkComments.delete(target);
@@ -413,6 +419,61 @@ export async function generateRollingSummary(messageId, options = {}) {
     if (target <= oldEnd) { errorToast(`Choose a message after ${oldEnd}; earlier content is already summarized.`); return ''; }
     draftBases.set(target, { endMsgId: oldEnd, updatedAt: rollingSummary?.updatedAt || null, summary: rollingSummary?.summary || '' });
     return summarizeHistory(await processRange(oldEnd + 1, target), target);
+}
+
+function summarySignature(value) {
+    return `${value?.endMsgId ?? -1}|${value?.updatedAt || ''}|${value?.summary || ''}`;
+}
+
+export async function generateActiveSummaryReplacement(options = {}) {
+    if (!rollingSummary) { warningToast('No active summary to regenerate.'); return ''; }
+    commandArgs = { ...options };
+    const active = clone(rollingSummary);
+    const base = archiveEntries
+        .filter(entry => Number(entry.endMsgId) < active.endMsgId)
+        .sort((a, b) => a.endMsgId - b.endMsgId)
+        .at(-1) || null;
+    const start = base ? base.endMsgId + 1 : 0;
+    const signature = summarySignature(active);
+    regenerationBases.set(active.endMsgId, { signature, start, previousSummary: base?.summary || '' });
+    const result = await summarizeHistory(await processRange(start, active.endMsgId, { includeHidden: true }), active.endMsgId, { previousSummary: base?.summary || '', checkpointType: `regeneration:${signature}`, persistCheckpoint: false, addChunkComment: false });
+    if (result && summarySignature(rollingSummary) !== signature) {
+        errorToast('The active summary changed during regeneration. Generate it again.');
+        return '';
+    }
+    return result;
+}
+
+export async function acceptActiveSummaryReplacement(text, endMsgId) {
+    const summary = String(text || '').trim();
+    const target = Number(endMsgId);
+    const base = regenerationBases.get(target);
+    if (!summary || !rollingSummary || target !== rollingSummary.endMsgId || !base || base.signature !== summarySignature(rollingSummary)) {
+        errorToast('The active summary changed while this proposal was open. Generate it again.');
+        return false;
+    }
+    await createChatBackup('active summary regeneration');
+    rollingSummary = { ...rollingSummary, summary, updatedAt: new Date().toISOString() };
+    regenerationBases.delete(target);
+    pendingChunkComments.delete(target);
+    await saveData({ chat: true });
+    await refreshViews();
+    doneToast('Active summary regenerated.');
+    return true;
+}
+
+export async function regenerateActiveSummary(options = {}) {
+    if (endChapterInProgress) { warningToast('A rolling summary is already being generated.'); return false; }
+    if (!rollingSummary) { warningToast('No active summary to regenerate.'); return false; }
+    endChapterInProgress = true;
+    try {
+        let proposal;
+        try { proposal = await generateActiveSummaryReplacement(options); }
+        catch (error) { errorToast(`Summary failed: ${error?.message || error}`); debug('Active summary regeneration failed:', error); return false; }
+        if (!proposal) return false;
+        const { openRegenerationPopup } = await import('./settings.js');
+        return await openRegenerationPopup(proposal, rollingSummary.endMsgId);
+    } finally { endChapterInProgress = false; }
 }
 
 export async function acceptRollingSummary(text, endMsgId, archiveOld = true) {
