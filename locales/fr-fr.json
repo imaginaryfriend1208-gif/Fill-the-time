@@ -87,5 +87,13 @@
   "tutorial_inject_title": "Injection automatique facultative",
   "tutorial_inject_body": "Inject at Depth prend en charge {{fillthetime}}, {{lastMessageId}} et {{firstIncludedMessageId}}. Évitez de dupliquer la même entrée Prompt Manager.",
   "tutorial_done_title": "Prêt",
-  "tutorial_done_body": "Les commandes /fillthetime-end, /fillthetime-show et /fillthetime-clear sont aussi disponibles. Chaque discussion possède son résumé et son archive."
+  "tutorial_done_body": "Les commandes /fillthetime-end, /fillthetime-show et /fillthetime-clear sont aussi disponibles. Chaque discussion possède son résumé et son archive.",
+  "rmr_resume": "Reprendre",
+  "rmr_discard": "Abandonner",
+  "rmr_stage": "Étape",
+  "rmr_progress_chunk": "Segment",
+  "rmr_progress_final": "Fusion en résumé final...",
+  "rmr_pending_checkpoint": "Chapitre inachevé",
+  "rmr_chunks_done": "segments terminés",
+  "rmr_discard_checkpoint_confirm": "Abandonner la progression enregistrée du chapitre ?"
 }

@@ -87,5 +87,13 @@
   "tutorial_inject_title": "Chèn tự động tùy chọn",
   "tutorial_inject_body": "Inject at Depth hỗ trợ {{fillthetime}}, {{lastMessageId}} và {{firstIncludedMessageId}}. Tránh dùng trùng với cùng mục Prompt Manager.",
   "tutorial_done_title": "Sẵn sàng",
-  "tutorial_done_body": "Bạn cũng có thể dùng /fillthetime-end, /fillthetime-show và /fillthetime-clear. Mỗi chat có bản active và kho lưu trữ riêng."
+  "tutorial_done_body": "Bạn cũng có thể dùng /fillthetime-end, /fillthetime-show và /fillthetime-clear. Mỗi chat có bản active và kho lưu trữ riêng.",
+  "rmr_resume": "Tiếp tục",
+  "rmr_discard": "Bỏ tiến trình",
+  "rmr_stage": "Giai đoạn",
+  "rmr_progress_chunk": "Chunk",
+  "rmr_progress_final": "Đang gộp thành bản tóm tắt cuối...",
+  "rmr_pending_checkpoint": "Chapter đang dở",
+  "rmr_chunks_done": "chunk đã xong",
+  "rmr_discard_checkpoint_confirm": "Bỏ tiến trình chapter đã lưu?"
 }

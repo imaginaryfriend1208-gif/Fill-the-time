@@ -170,8 +170,54 @@ async function loadUI() {
             await autoSplitSummarize(end, stages, { autoAcceptIntermediate: autoAccept });
         } finally { button.prop('disabled', false); }
     });
+    $('#rmr_resume_checkpoint').off('click').on('click', async function () {
+        const button = $(this);
+        if (button.prop('disabled')) return;
+        button.prop('disabled', true);
+        try {
+            const { resumePendingCheckpoint } = await import('./memories.js');
+            await resumePendingCheckpoint();
+        } finally { button.prop('disabled', false); renderPendingCheckpoint(); }
+    });
+    $('#rmr_discard_checkpoint').off('click').on('click', async function () {
+        if (!confirm(getText('rmr_discard_checkpoint_confirm', 'Discard the saved chapter progress?'))) return;
+        const { discardPendingCheckpoint } = await import('./memories.js');
+        await discardPendingCheckpoint();
+    });
     bindPresets(); $('#rmr_master_export').off('click').on('click', exportConfig); $('#rmr_master_import').off('click').on('click', importConfig);
-    initTutorialUI(); await renderActiveSummary(); await renderArchiveList(); debug('Rolling summary UI loaded');
+    initTutorialUI(); await renderActiveSummary(); await renderArchiveList(); renderPendingCheckpoint(); debug('Rolling summary UI loaded');
+}
+
+export function updateChapterProgress(state) {
+    const box = $('#rmr_chapter_progress'); if (!box.length) return;
+    if (!state) { box.hide(); $('#rmr_chapter_progress_fill').css('width', '0%'); renderPendingCheckpoint(); return; }
+    const { phase, current = 0, total = 0, stage } = state;
+    const stageText = stage?.total > 1 ? `${getText('rmr_stage', 'Stage')} ${stage.current}/${stage.total} — ` : '';
+    let text, percent;
+    if (phase === 'final') {
+        text = `${stageText}${getText('rmr_progress_final', 'Merging into final summary...')}`;
+        percent = 100;
+    } else {
+        text = `${stageText}${getText('rmr_progress_chunk', 'Chunk')} ${Math.min(current + 1, total)}/${total}`;
+        percent = total ? Math.round((current / total) * 100) : 0;
+    }
+    $('#rmr_chapter_progress_text').text(text);
+    $('#rmr_chapter_progress_fill').css('width', `${percent}%`);
+    box.css('display', 'flex');
+    renderPendingCheckpoint();
+}
+
+export async function renderPendingCheckpoint() {
+    const box = $('#rmr_pending_checkpoint'); if (!box.length) return;
+    try {
+        const { getPendingCheckpoint } = await import('./memories.js');
+        const pending = getPendingCheckpoint();
+        const generating = $('#rmr_chapter_progress').is(':visible');
+        if (!pending || generating) { box.hide(); return; }
+        const when = pending.updatedAt ? ` · ${new Date(pending.updatedAt).toLocaleString()}` : '';
+        $('#rmr_pending_checkpoint_text').text(`${getText('rmr_pending_checkpoint', 'Unfinished chapter')}: ${pending.chunksDone}/${pending.chunkCount} ${getText('rmr_chunks_done', 'chunks done')} (${getText('rmr_through_message', 'Through message')} ${pending.targetMessageId})${when}`);
+        box.css('display', 'flex');
+    } catch (error) { debug('Could not render pending checkpoint:', error); box.hide(); }
 }
 
 const presetById = id => settings.summarize_presets.find(item => item.id === id);

@@ -21,6 +21,14 @@ let endChapterInProgress = false;
 const draftBases = new Map();
 const regenerationBases = new Map();
 const pendingChunkComments = new Map();
+let progressStage = null;
+
+async function setProgress(state) {
+    try {
+        const ui = await import('./settings.js');
+        ui.updateChapterProgress?.(state ? { ...state, stage: progressStage } : null);
+    } catch (error) { debug('Could not update chapter progress UI:', error); }
+}
 
 const infoToast = text => { if (!commandArgs?.quiet) toastr.info(text, 'Fill the Time'); };
 const doneToast = text => { if (!commandArgs?.quiet) toastr.success(text, 'Fill the Time'); };
@@ -68,6 +76,7 @@ async function refreshViews() {
         const ui = await import('./settings.js');
         await ui.renderActiveSummary?.();
         await ui.renderArchiveList?.();
+        ui.renderPendingCheckpoint?.();
     } catch (error) { debug('Could not refresh summary UI:', error); }
     try {
         const messages = await import('./messages.js');
@@ -374,14 +383,17 @@ async function summarizeHistory(history, target, options = {}) {
     if (chunks.length > 1) {
         while (summaries.length < chunks.length) {
             const index = summaries.length;
+            await setProgress({ phase: 'chunks', current: index, total: chunks.length });
             try {
                 const result = await generateFromText(chunks[index], index + 1, false);
                 if (!result) throw new Error('Empty chunk summary');
                 summaries.push(result);
                 if (persistCheckpoint) await saveCheckpoint({ checkpointType, targetMessageId: target, startMsgId: start, chunkCount: chunks.length, chunkSummaries: summaries, stage: 'chunks' });
+                await setProgress({ phase: 'chunks', current: summaries.length, total: chunks.length });
             } catch (error) {
                 if (persistCheckpoint) await saveCheckpoint({ checkpointType, targetMessageId: target, startMsgId: start, chunkCount: chunks.length, chunkSummaries: summaries, stage: 'chunk', failedChunkIndex: index, error: error?.message || String(error) });
                 errorToast(persistCheckpoint ? `Summary failed at chunk ${index + 1}/${chunks.length}. Progress was saved.` : `Summary failed at chunk ${index + 1}/${chunks.length}.`);
+                await setProgress(null);
                 return '';
             }
         }
@@ -393,14 +405,17 @@ async function summarizeHistory(history, target, options = {}) {
             const previous = options.previousSummary ?? rollingSummary?.summary ?? '';
             result = previous ? `${previous}\n\n${combined}`.trim() : combined;
         } else {
+            await setProgress({ phase: 'final', current: chunks.length, total: chunks.length });
             result = await generateFromText(combined, 0, true, options.previousSummary);
         }
     }
     catch (error) {
         if (persistCheckpoint) await saveCheckpoint({ checkpointType, targetMessageId: target, startMsgId: start, chunkCount: chunks.length, chunkSummaries: summaries, stage: 'final', error: error?.message || String(error) });
         errorToast(persistCheckpoint ? 'Final summary failed. Chunk progress was saved.' : 'Final summary failed.');
+        await setProgress(null);
         return '';
     }
+    await setProgress(null);
     result = String(result || '').trim();
     if (result && chunks.length > 1 && settings.add_chunk_summaries && options.addChunkComment !== false) {
         pendingChunkComments.set(target, combined);
@@ -559,6 +574,7 @@ export async function autoSplitSummarize(messageId, stages = 1, options = {}) {
         for (let stage = 0; stage < cuts.length; stage++) {
             const end = cuts[stage];
             const isLast = stage === cuts.length - 1;
+            progressStage = cuts.length > 1 ? { current: stage + 1, total: cuts.length } : null;
             if (cuts.length > 1) infoToast(`Stage ${stage + 1}/${cuts.length}: summarizing through message ${end}...`);
             let proposal;
             try { proposal = await generateRollingSummary(end, options); }
@@ -577,7 +593,40 @@ export async function autoSplitSummarize(messageId, stages = 1, options = {}) {
         return true;
     } finally {
         endChapterInProgress = false;
+        progressStage = null;
+        await setProgress(null);
     }
+}
+
+export function getPendingCheckpoint() {
+    const pending = pendingCheckpoint();
+    if (!pending || (pending.checkpointType || 'forward') !== 'forward') return null;
+    const chat = getContext().chat || [];
+    const target = Number(pending.targetMessageId);
+    if (!Number.isInteger(target) || target < 0 || target >= chat.length) return null;
+    return {
+        targetMessageId: target,
+        chunkCount: Number(pending.chunkCount) || 0,
+        chunksDone: Array.isArray(pending.chunkSummaries) ? pending.chunkSummaries.length : 0,
+        stage: pending.stage || 'chunks',
+        updatedAt: pending.updatedAt || null,
+    };
+}
+
+export async function resumePendingCheckpoint(options = {}) {
+    const pending = getPendingCheckpoint();
+    if (!pending) { warningToast('No saved chapter progress to resume.'); return false; }
+    return endChapter(pending.targetMessageId, options);
+}
+
+export async function discardPendingCheckpoint() {
+    const context = getContext();
+    if (!context.chatMetadata?.[PENDING_KEY]) return false;
+    delete context.chatMetadata[PENDING_KEY];
+    await context.saveMetadata();
+    try { (await import('./settings.js')).renderPendingCheckpoint?.(); } catch (error) { debug('Could not refresh checkpoint UI:', error); }
+    doneToast('Saved chapter progress discarded.');
+    return true;
 }
 
 export async function endChapter(messageOrId, options = {}) {

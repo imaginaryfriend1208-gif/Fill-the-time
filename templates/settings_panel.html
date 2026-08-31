@@ -43,6 +43,17 @@
                     <button type="button" class="menu_button" id="rmr_create_chapter"><i class="fa-solid fa-plus"></i> <span data-i18n="rmr_create_chapter">Create Chapter</span></button>
                     <label class="checkbox_label" for="rmr_auto_accept_stages"><input id="rmr_auto_accept_stages" class="checkbox" type="checkbox" checked><span data-i18n="rmr_auto_accept_stages">Auto-accept intermediate stages (review only the final)</span></label>
                 </div>
+                <div id="rmr_chapter_progress" class="rmr-chapter-progress" style="display:none">
+                    <small id="rmr_chapter_progress_text" class="rmr-chapter-progress-text"></small>
+                    <div class="rmr-chapter-progress-track"><div id="rmr_chapter_progress_fill" class="rmr-chapter-progress-fill"></div></div>
+                </div>
+                <div id="rmr_pending_checkpoint" class="rmr-pending-checkpoint" style="display:none">
+                    <span id="rmr_pending_checkpoint_text" class="rmr-pending-text"></span>
+                    <div class="rmr-pending-actions">
+                        <button type="button" class="menu_button" id="rmr_resume_checkpoint"><i class="fa-solid fa-play"></i> <span data-i18n="rmr_resume">Resume</span></button>
+                        <button type="button" class="menu_button" id="rmr_discard_checkpoint"><i class="fa-solid fa-trash-can"></i> <span data-i18n="rmr_discard">Discard</span></button>
+                    </div>
+                </div>
                 <p><small data-i18n="rmr_create_chapter_hint">Summarizes from the message after the active summary through the End ID. With 2+ stages, the range is split evenly by tokens and each stage merges into the rolling summary.</small></p>
             </div>
             <div class="rmr-extension_block"><div id="rmr_active_summary_container" class="rmr-summaries-container"></div></div>
