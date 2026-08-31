@@ -91,6 +91,7 @@ export async function loadRollingSummaryData() {
     draftBases.clear();
     regenerationBases.clear();
     pendingChunkComments.clear();
+    worldInfoCache = null;
     const context = getContext();
     context.chatMetadata ||= {};
     rollingSummary = normalizeSummary(context.chatMetadata.fillTheTime);
@@ -325,6 +326,28 @@ async function processRange(start, end, { includeHidden = false } = {}) {
     return processed.filter(message => includeHidden || !message.is_system);
 }
 
+let worldInfoCache = null;
+export async function getWorldInfoText() {
+    if (worldInfoCache !== null) return worldInfoCache;
+    try {
+        const { getSortedEntries } = await import('../../../../world-info.js');
+        const entries = await getSortedEntries();
+        worldInfoCache = entries
+            .filter(entry => entry?.constant && !entry.disable && String(entry.content || '').trim())
+            .map(entry => String(entry.content).trim())
+            .join('\n\n');
+    } catch (error) {
+        debug('Could not collect world info entries:', error);
+        worldInfoCache = '';
+    }
+    return worldInfoCache;
+}
+
+async function substituteWorldInfo(text) {
+    if (!/{{worldinfo}}/i.test(text)) return text;
+    return text.replace(/{{worldinfo}}/gi, await getWorldInfoText());
+}
+
 async function generateFromText(content, chunk = 0, includePrevious = true, previousOverride = null) {
     const rate = Number(settings.rate_limit) || 0;
     const delay = rate > 0 ? Math.max(500, 60000 / rate) : 0;
@@ -338,6 +361,8 @@ async function generateFromText(content, chunk = 0, includePrevious = true, prev
         const previous = includePrevious ? (previousOverride ?? rollingSummary?.summary ?? '') : '';
         let userPrompt = String(settings.memory_prompt_template || '').replace(/{{content}}/gi, String(content || '').trim()).replace(/{{previousSummary}}/gi, previous);
         let systemPrompt = String(settings.memory_system_prompt || '').replace(/{{content}}/gi, String(content || '').trim()).replace(/{{previousSummary}}/gi, previous);
+        userPrompt = await substituteWorldInfo(userPrompt);
+        systemPrompt = await substituteWorldInfo(systemPrompt);
         userPrompt = context.substituteParams(userPrompt, context.name1, context.name2);
         systemPrompt = context.substituteParams(systemPrompt, context.name1, context.name2);
         const messages = [];
@@ -358,6 +383,7 @@ async function generateFromText(content, chunk = 0, includePrevious = true, prev
 
 async function summarizeHistory(history, target, options = {}) {
     if (!history.length) { warningToast('No visible content to summarize.'); return ''; }
+    worldInfoCache = null;
     const context = getContext();
     const maxTokens = Math.max(100, Number(context.maxContext || 4096) - 100);
     const chunks = [];

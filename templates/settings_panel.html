@@ -102,9 +102,9 @@
 
             <h4 data-i18n="rmr_summarization_prompts">Summarization Prompts</h4>
             <div class="rmr-extension_block flex-container flexFlowColumn">
-                <label for="rmr_memory_system_prompt"><small data-i18n="rmr_system_prompt">System Prompt</small></label>
+                <label for="rmr_memory_system_prompt"><small data-i18n="rmr_system_prompt">System Prompt — supports {{worldInfo}} (constant lorebook entries) and card macros like {{description}}, {{personality}}, {{mesExamples}}</small></label>
                 <textarea rows="5" class="margin0 text_pole textarea_compact" id="rmr_memory_system_prompt"></textarea>
-                <label for="rmr_memory_prompt_template"><small data-i18n="rmr_user_prompt">User Prompt — supports {{previousSummary}} and {{content}}</small></label>
+                <label for="rmr_memory_prompt_template"><small data-i18n="rmr_user_prompt">User Prompt — supports {{previousSummary}}, {{content}} and {{worldInfo}}</small></label>
                 <textarea rows="8" class="margin0 text_pole textarea_compact" id="rmr_memory_prompt_template"></textarea>
             </div>
             <hr>
