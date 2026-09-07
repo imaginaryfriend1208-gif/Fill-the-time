@@ -12,8 +12,11 @@ import { createChatBackup } from './backup.js';
 const CHAT_APIS = ['claude', 'openrouter', 'windowai', 'scale', 'ai21', 'makersuite', 'vertexai', 'mistralai', 'custom', 'google', 'cohere', 'perplexity', 'groq', '01ai', 'nanogpt', 'deepseek', 'aimlapi', 'xai', 'pollinations', 'moonshot', 'zai'];
 const INJECT_KEY = 'FILLTHETIME_MEMORY_INJECT';
 const PENDING_KEY = 'fillTheTimePendingChapter';
+const STOCK_KEY = 'fillTheTimeStock';
 let rollingSummary = null;
 let archiveEntries = [];
+let stockedChunks = [];
+let stockInProgress = null;
 let isInternalGeneration = false;
 let commandArgs = {};
 let lastGenerationTimestamp = 0;
@@ -94,6 +97,7 @@ export async function loadRollingSummaryData() {
     worldInfoCache = null;
     const context = getContext();
     context.chatMetadata ||= {};
+    stockedChunks = Array.isArray(context.chatMetadata[STOCK_KEY]) ? context.chatMetadata[STOCK_KEY].map(normalizeStockEntry).filter(Boolean).filter(entry => entry.toMsgId < (context.chat || []).length).sort((a, b) => a.fromMsgId - b.fromMsgId) : [];
     rollingSummary = normalizeSummary(context.chatMetadata.fillTheTime);
     archiveEntries = Array.isArray(context.chatMetadata.fillTheTimeArchive) ? context.chatMetadata.fillTheTimeArchive.map(normalizeArchive).filter(Boolean) : [];
     const legacy = parseLegacyTimeline(context.chatMetadata.timeline)
@@ -297,6 +301,90 @@ async function sendRequest(profileId, messages, maxTokens, overridePayload) {
     return { content: await generateQuietPrompt({ quietPrompt: messages.map(item => item.content).join('\n\n') }) };
 }
 
+function normalizeStockEntry(value) {
+    if (!value || typeof value !== 'object') return null;
+    const summary = String(value.summary || '').trim();
+    const fromMsgId = Number(value.fromMsgId);
+    const toMsgId = Number(value.toMsgId);
+    if (!summary || !Number.isInteger(fromMsgId) || !Number.isInteger(toMsgId) || fromMsgId < 0 || toMsgId < fromMsgId) return null;
+    return { summary, fromMsgId, toMsgId, createdAt: typeof value.createdAt === 'string' ? value.createdAt : new Date().toISOString() };
+}
+
+async function saveStock() {
+    const context = getContext();
+    context.chatMetadata ||= {};
+    if (stockedChunks.length) context.chatMetadata[STOCK_KEY] = clone(stockedChunks);
+    else delete context.chatMetadata[STOCK_KEY];
+    await context.saveMetadata();
+    try { (await import('./settings.js')).renderStockStatus?.(); } catch (error) { debug('Could not refresh stock status:', error); }
+}
+
+export function getStockedChunks() { return clone(stockedChunks); }
+export function isStocking() { return Boolean(stockInProgress); }
+
+export async function invalidateStockFrom(messageId) {
+    const id = Number(messageId);
+    if (!Number.isInteger(id) || !stockedChunks.length) return;
+    const before = stockedChunks.length;
+    stockedChunks = stockedChunks.filter(entry => entry.toMsgId < id);
+    if (stockedChunks.length !== before) { debug(`Invalidated ${before - stockedChunks.length} stocked chunks from message ${id}.`); await saveStock(); }
+}
+
+export async function clearStockedChunks() {
+    if (!stockedChunks.length) return false;
+    stockedChunks = [];
+    await saveStock();
+    return true;
+}
+
+export async function autoStockChunks() {
+    if (stockInProgress || endChapterInProgress || !settings?.auto_stock_chunks) return false;
+    const context = getContext();
+    const chat = context.chat || [];
+    if (!chat.length) return false;
+    const base = Math.max(rollingSummary?.endMsgId ?? -1, stockedChunks.at(-1)?.toMsgId ?? -1);
+    if (base >= chat.length - 1) return false;
+    const chatId = context.chatId;
+    stockInProgress = true;
+    commandArgs = { quiet: true };
+    try {
+        (await import('./settings.js')).renderStockStatus?.();
+        const history = await processRange(base + 1, chat.length - 1);
+        const { pieces } = await buildChunks(history);
+        if (!pieces.length) return false;
+        worldInfoCache = null;
+        let coverFrom = base + 1;
+        let added = 0;
+        for (const piece of pieces) {
+            if (endChapterInProgress || getContext().chatId !== chatId) break;
+            let summary;
+            try { summary = await generateFromText(piece.text, 0, false); }
+            catch (error) { debug('Stock chunk generation failed:', error); break; }
+            if (!summary || endChapterInProgress || getContext().chatId !== chatId) break;
+            stockedChunks.push({ summary, fromMsgId: coverFrom, toMsgId: piece.endId, createdAt: new Date().toISOString() });
+            coverFrom = piece.endId + 1;
+            added++;
+            await saveStock();
+        }
+        return added > 0;
+    } catch (error) { debug('Auto-stock failed:', error); return false; }
+    finally {
+        stockInProgress = false;
+        try { (await import('./settings.js')).renderStockStatus?.(); } catch { /* ignore */ }
+    }
+}
+
+function takeUsableStock(oldEnd, target) {
+    const usable = [];
+    let cursor = oldEnd + 1;
+    for (const entry of stockedChunks) {
+        if (entry.fromMsgId === cursor && entry.toMsgId <= target) { usable.push(entry); cursor = entry.toMsgId + 1; }
+        else if (entry.toMsgId < cursor) continue;
+        else break;
+    }
+    return { usable, cursor };
+}
+
 function pendingCheckpoint() { const value = getContext().chatMetadata?.[PENDING_KEY]; return value && typeof value === 'object' ? value : null; }
 async function saveCheckpoint(value) {
     const context = getContext();
@@ -381,41 +469,51 @@ async function generateFromText(content, chunk = 0, includePrevious = true, prev
     } finally { isInternalGeneration = false; }
 }
 
-async function summarizeHistory(history, target, options = {}) {
-    if (!history.length) { warningToast('No visible content to summarize.'); return ''; }
-    worldInfoCache = null;
+async function buildChunks(history) {
     const context = getContext();
     const maxTokens = Math.max(100, Number(context.maxContext || 4096) - 100);
-    const chunks = [];
-    let current = '';
+    const pieces = [];
+    let current = null;
     for (const message of history) {
+        const index = message.index ?? -1;
         const text = `${message.name ? `${message.name}: ` : ''}${message.mes || ''}`;
-        const candidate = current ? `${current}\n\n${text}` : text;
+        const candidate = current ? `${current.text}\n\n${text}` : text;
         let tokens;
         try { tokens = await context.getTokenCountAsync(candidate); } catch { tokens = Math.ceil(candidate.length / 4); }
-        if (tokens > maxTokens && current) { chunks.push(current); current = text; }
-        else if (tokens > maxTokens) { chunks.push(text); current = ''; }
-        else current = candidate;
+        if (tokens > maxTokens && current) { pieces.push(current); current = { text, startId: index, endId: index }; }
+        else if (tokens > maxTokens) { pieces.push({ text, startId: index, endId: index }); current = null; }
+        else current = current ? { ...current, text: candidate, endId: index } : { text: candidate, startId: index, endId: index };
     }
-    if (current) chunks.push(current);
-    if (!chunks.length) return '';
-    const start = history[0].index ?? 0;
+    return { pieces, tail: current };
+}
+
+async function summarizeHistory(history, target, options = {}) {
+    const stocked = Array.isArray(options.stockedSummaries) ? options.stockedSummaries.filter(Boolean) : [];
+    if (!history.length && !stocked.length) { warningToast('No visible content to summarize.'); return ''; }
+    worldInfoCache = null;
+    const { pieces, tail } = await buildChunks(history);
+    const chunks = [...pieces, ...(tail ? [tail] : [])].map(piece => piece.text);
+    if (!chunks.length && !stocked.length) return '';
+    const start = history[0]?.index ?? 0;
     const persistCheckpoint = options.persistCheckpoint !== false;
     const pending = persistCheckpoint ? pendingCheckpoint() : null;
     const checkpointType = options.checkpointType || 'forward';
     const pendingType = pending?.checkpointType || 'forward';
+    const totalPieces = stocked.length + chunks.length;
+    const needChunkPass = chunks.length > 1 || (stocked.length > 0 && chunks.length > 0);
     let summaries = pending && pendingType === checkpointType && Number(pending.startMsgId) === start && Number(pending.targetMessageId) === target && Number(pending.chunkCount) === chunks.length && Array.isArray(pending.chunkSummaries) ? [...pending.chunkSummaries] : [];
     if (summaries.length) infoToast(`Resuming from chunk ${summaries.length + 1}/${chunks.length}.`);
-    if (chunks.length > 1) {
+    if (stocked.length) infoToast(`Using ${stocked.length} stocked chunk ${stocked.length === 1 ? 'summary' : 'summaries'}.`);
+    if (needChunkPass) {
         while (summaries.length < chunks.length) {
             const index = summaries.length;
-            await setProgress({ phase: 'chunks', current: index, total: chunks.length });
+            await setProgress({ phase: 'chunks', current: stocked.length + index, total: totalPieces });
             try {
                 const result = await generateFromText(chunks[index], index + 1, false);
                 if (!result) throw new Error('Empty chunk summary');
                 summaries.push(result);
                 if (persistCheckpoint) await saveCheckpoint({ checkpointType, targetMessageId: target, startMsgId: start, chunkCount: chunks.length, chunkSummaries: summaries, stage: 'chunks' });
-                await setProgress({ phase: 'chunks', current: summaries.length, total: chunks.length });
+                await setProgress({ phase: 'chunks', current: stocked.length + summaries.length, total: totalPieces });
             } catch (error) {
                 if (persistCheckpoint) await saveCheckpoint({ checkpointType, targetMessageId: target, startMsgId: start, chunkCount: chunks.length, chunkSummaries: summaries, stage: 'chunk', failedChunkIndex: index, error: error?.message || String(error) });
                 errorToast(persistCheckpoint ? `Summary failed at chunk ${index + 1}/${chunks.length}. Progress was saved.` : `Summary failed at chunk ${index + 1}/${chunks.length}.`);
@@ -424,14 +522,16 @@ async function summarizeHistory(history, target, options = {}) {
             }
         }
     }
-    const combined = chunks.length === 1 ? chunks[0] : summaries.join('\n\n');
+    const freshCombined = needChunkPass ? summaries.join('\n\n') : chunks.join('\n\n');
+    const combined = [...stocked, freshCombined].filter(Boolean).join('\n\n');
+    const piecesAreSummaries = needChunkPass || (stocked.length > 0 && !chunks.length);
     let result;
     try {
-        if (chunks.length > 1 && settings.use_chunk_summaries_as_chapter) {
+        if (piecesAreSummaries && settings.use_chunk_summaries_as_chapter) {
             const previous = options.previousSummary ?? rollingSummary?.summary ?? '';
             result = previous ? `${previous}\n\n${combined}`.trim() : combined;
         } else {
-            await setProgress({ phase: 'final', current: chunks.length, total: chunks.length });
+            await setProgress({ phase: 'final', current: totalPieces, total: totalPieces });
             result = await generateFromText(combined, 0, true, options.previousSummary);
         }
     }
@@ -443,7 +543,7 @@ async function summarizeHistory(history, target, options = {}) {
     }
     await setProgress(null);
     result = String(result || '').trim();
-    if (result && chunks.length > 1 && settings.add_chunk_summaries && options.addChunkComment !== false) {
+    if (result && totalPieces > 1 && piecesAreSummaries && settings.add_chunk_summaries && options.addChunkComment !== false) {
         pendingChunkComments.set(target, combined);
     } else {
         pendingChunkComments.delete(target);
@@ -459,7 +559,9 @@ export async function generateRollingSummary(messageId, options = {}) {
     const oldEnd = rollingSummary?.endMsgId ?? -1;
     if (target <= oldEnd) { errorToast(`Choose a message after ${oldEnd}; earlier content is already summarized.`); return ''; }
     draftBases.set(target, { endMsgId: oldEnd, updatedAt: rollingSummary?.updatedAt || null, summary: rollingSummary?.summary || '' });
-    return summarizeHistory(await processRange(oldEnd + 1, target), target);
+    const { usable, cursor } = options.useStock === false ? { usable: [], cursor: oldEnd + 1 } : takeUsableStock(oldEnd, target);
+    const history = cursor <= target ? await processRange(cursor, target) : [];
+    return summarizeHistory(history, target, { stockedSummaries: usable.map(entry => entry.summary) });
 }
 
 function summarySignature(value) {
@@ -548,6 +650,15 @@ export async function acceptRollingSummary(text, endMsgId, archiveOld = true) {
         }
     }
     await clearCheckpoint(target);
+    if (stockedChunks.length) {
+        const chain = [];
+        let cursor = target + 1;
+        for (const entry of stockedChunks) {
+            if (entry.fromMsgId === cursor) { chain.push(entry); cursor = entry.toMsgId + 1; }
+        }
+        stockedChunks = chain;
+        await saveStock();
+    }
     const chunkComment = pendingChunkComments.get(target);
     if (chunkComment) {
         try { await context.executeSlashCommandsWithOptions(`/comment at=${target + 1} <details class="rmr-summary-chunks"><summary>Chunk Summaries</summary>${chunkComment}</details>`); }

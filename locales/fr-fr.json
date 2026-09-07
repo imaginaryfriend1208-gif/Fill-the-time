@@ -95,5 +95,10 @@
   "rmr_progress_final": "Fusion en résumé final...",
   "rmr_pending_checkpoint": "Chapitre inachevé",
   "rmr_chunks_done": "segments terminés",
-  "rmr_discard_checkpoint_confirm": "Abandonner la progression enregistrée du chapitre ?"
+  "rmr_discard_checkpoint_confirm": "Abandonner la progression enregistrée du chapitre ?",
+  "rmr_auto_stock_chunks": "Pré-générer les résumés de segments en arrière-plan",
+  "rmr_clear_stock": "Vider le stock",
+  "rmr_clear_stock_confirm": "Supprimer tous les résumés de segments stockés pour cette discussion ?",
+  "rmr_stocked_chunks": "segments stockés",
+  "rmr_stocking_now": "Stockage en arrière-plan..."
 }

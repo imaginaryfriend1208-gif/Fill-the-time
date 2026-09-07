@@ -69,6 +69,7 @@ const defaults = {
     is_enabled: true, show_buttons: [Buttons.STOP], memory_system_prompt: SYSTEM_PROMPT,
     memory_prompt_template: USER_PROMPT, rate_limit: 0, profile: null, hide_chapter: true,
     add_chunk_summaries: false, use_chunk_summaries_as_chapter: false, archive_on_accept: true,
+    auto_stock_chunks: false,
     summarize_presets: [DEFAULT_PRESET, WRITER_DIARY_PRESET, CHARACTER_DIARY_PRESET], current_summarize_preset: DEFAULT_PRESET.id,
     inject_enabled: false, inject_depth: 0, inject_role: extension_prompt_roles.SYSTEM,
     inject_prompt: INJECT_PROMPT, rolling_settings_migrated: true, locale_override: 'auto',
@@ -145,6 +146,15 @@ async function loadUI() {
     $('#rmr_inject_prompt').val(settings.inject_prompt).attr('placeholder', INJECT_PROMPT);
     $('#rmr_chapter_button').prop('checked', settings.show_buttons.includes(Buttons.STOP)).off('change').on('change', function () { settings.show_buttons = this.checked ? [Buttons.STOP] : []; save(); resetMessageButtons(); });
     for (const key of ['hide_chapter','add_chunk_summaries','use_chunk_summaries_as_chapter','archive_on_accept']) $(`#rmr_${key}`).prop('checked', !!settings[key]).off('change').on('change', function () { settings[key] = this.checked; save(); });
+    $('#rmr_auto_stock_chunks').prop('checked', !!settings.auto_stock_chunks).off('change').on('change', async function () {
+        settings.auto_stock_chunks = this.checked; save();
+        if (this.checked) { const { autoStockChunks } = await import('./memories.js'); autoStockChunks(); }
+    });
+    $('#rmr_clear_stock').off('click').on('click', async function () {
+        if (!confirm(getText('rmr_clear_stock_confirm', 'Delete all stocked chunk summaries for this chat?'))) return;
+        const { clearStockedChunks } = await import('./memories.js');
+        await clearStockedChunks();
+    });
     $('#rmr_rate_limit').val(settings.rate_limit).off('change').on('change', function () { settings.rate_limit = Math.max(0, Number(this.value) || 0); this.value = settings.rate_limit; save(); });
     populateProfiles(); $('#rmr_profile').off('change').on('change', function () { settings.profile = this.value || null; save(); });
     $('#rmr_inject_enabled').prop('checked', settings.inject_enabled).off('change').on('change', async function () { settings.inject_enabled = this.checked; save(); await updateInjection(); });
@@ -185,7 +195,22 @@ async function loadUI() {
         await discardPendingCheckpoint();
     });
     bindPresets(); $('#rmr_master_export').off('click').on('click', exportConfig); $('#rmr_master_import').off('click').on('click', importConfig);
-    initTutorialUI(); await renderActiveSummary(); await renderArchiveList(); renderPendingCheckpoint(); debug('Rolling summary UI loaded');
+    initTutorialUI(); await renderActiveSummary(); await renderArchiveList(); renderPendingCheckpoint(); renderStockStatus(); debug('Rolling summary UI loaded');
+}
+
+export async function renderStockStatus() {
+    const box = $('#rmr_stock_status'); if (!box.length) return;
+    try {
+        const { getStockedChunks, isStocking } = await import('./memories.js');
+        const entries = getStockedChunks();
+        const stocking = isStocking();
+        if (!entries.length && !stocking) { box.hide(); return; }
+        const coverage = entries.length ? `${entries.length} ${getText('rmr_stocked_chunks', 'stocked chunks')} (${getText('rmr_through_message', 'Through message')} ${entries.at(-1).toMsgId})` : '';
+        const working = stocking ? getText('rmr_stocking_now', 'Stocking in background...') : '';
+        $('#rmr_stock_status_text').text([coverage, working].filter(Boolean).join(' · '));
+        box.find('#rmr_clear_stock').toggle(entries.length > 0);
+        box.css('display', 'flex');
+    } catch (error) { debug('Could not render stock status:', error); box.hide(); }
 }
 
 export function updateChapterProgress(state) {

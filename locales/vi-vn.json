@@ -95,5 +95,10 @@
   "rmr_progress_final": "Đang gộp thành bản tóm tắt cuối...",
   "rmr_pending_checkpoint": "Chapter đang dở",
   "rmr_chunks_done": "chunk đã xong",
-  "rmr_discard_checkpoint_confirm": "Bỏ tiến trình chapter đã lưu?"
+  "rmr_discard_checkpoint_confirm": "Bỏ tiến trình chapter đã lưu?",
+  "rmr_auto_stock_chunks": "Tự động stock chunk summary chạy ngầm",
+  "rmr_clear_stock": "Xóa kho chunk",
+  "rmr_clear_stock_confirm": "Xóa toàn bộ chunk summary đã stock cho chat này?",
+  "rmr_stocked_chunks": "chunk đã stock",
+  "rmr_stocking_now": "Đang stock chạy ngầm..."
 }
