@@ -148,7 +148,16 @@ async function loadUI() {
     for (const key of ['hide_chapter','add_chunk_summaries','use_chunk_summaries_as_chapter','archive_on_accept']) $(`#rmr_${key}`).prop('checked', !!settings[key]).off('change').on('change', function () { settings[key] = this.checked; save(); });
     $('#rmr_auto_stock_chunks').prop('checked', !!settings.auto_stock_chunks).off('change').on('change', async function () {
         settings.auto_stock_chunks = this.checked; save();
-        if (this.checked) { const { autoStockChunks } = await import('./memories.js'); autoStockChunks(); }
+        if (this.checked) { const { autoStockChunks } = await import('./memories.js'); autoStockChunks({ verbose: true }); }
+    });
+    $('#rmr_stock_now').off('click').on('click', async function () {
+        const button = $(this);
+        if (button.prop('disabled')) return;
+        button.prop('disabled', true);
+        try {
+            const { autoStockChunks } = await import('./memories.js');
+            await autoStockChunks({ force: true, verbose: true });
+        } finally { button.prop('disabled', false); }
     });
     $('#rmr_clear_stock').off('click').on('click', async function () {
         if (!confirm(getText('rmr_clear_stock_confirm', 'Delete all stocked chunk summaries for this chat?'))) return;

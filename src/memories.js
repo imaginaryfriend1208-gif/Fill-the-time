@@ -337,21 +337,33 @@ export async function clearStockedChunks() {
     return true;
 }
 
-export async function autoStockChunks() {
-    if (stockInProgress || endChapterInProgress || !settings?.auto_stock_chunks) return false;
+export async function autoStockChunks({ force = false, verbose = false } = {}) {
+    if (verbose) commandArgs = {};
+    if (stockInProgress) { if (verbose) infoToast('Stocking is already running.'); return false; }
+    if (endChapterInProgress) { if (verbose) warningToast('A rolling summary is being generated. Try again later.'); return false; }
+    if (!settings?.auto_stock_chunks && !force) return false;
     const context = getContext();
     const chat = context.chat || [];
-    if (!chat.length) return false;
+    if (!chat.length) { if (verbose) warningToast('No messages in this chat.'); return false; }
     const base = Math.max(rollingSummary?.endMsgId ?? -1, stockedChunks.at(-1)?.toMsgId ?? -1);
-    if (base >= chat.length - 1) return false;
+    if (base >= chat.length - 1) { if (verbose) infoToast('Everything up to the latest message is already summarized or stocked.'); return false; }
     const chatId = context.chatId;
     stockInProgress = true;
-    commandArgs = { quiet: true };
+    commandArgs = { quiet: !verbose };
     try {
         (await import('./settings.js')).renderStockStatus?.();
         const history = await processRange(base + 1, chat.length - 1);
-        const { pieces } = await buildChunks(history);
-        if (!pieces.length) return false;
+        const { pieces, tail } = await buildChunks(history);
+        if (!pieces.length) {
+            if (verbose) {
+                let tokens = 0;
+                try { tokens = tail ? await context.getTokenCountAsync(tail.text) : 0; } catch { tokens = Math.ceil((tail?.text || '').length / 4); }
+                const maxTokens = Math.max(100, Number(context.maxContext || 4096) - 100);
+                infoToast(`Not enough new content for a full chunk yet (~${tokens}/${maxTokens} tokens since message ${base + 1}). The tail is summarized directly when you create the chapter.`);
+            }
+            return false;
+        }
+        if (verbose) infoToast(`Stocking ${pieces.length} chunk ${pieces.length === 1 ? 'summary' : 'summaries'}...`);
         worldInfoCache = null;
         let coverFrom = base + 1;
         let added = 0;
@@ -366,8 +378,9 @@ export async function autoStockChunks() {
             added++;
             await saveStock();
         }
+        if (verbose && added > 0) doneToast(`Stocked ${added} chunk ${added === 1 ? 'summary' : 'summaries'} (through message ${stockedChunks.at(-1).toMsgId}).`);
         return added > 0;
-    } catch (error) { debug('Auto-stock failed:', error); return false; }
+    } catch (error) { debug('Auto-stock failed:', error); if (verbose) errorToast(`Stocking failed: ${error?.message || error}`); return false; }
     finally {
         stockInProgress = false;
         try { (await import('./settings.js')).renderStockStatus?.(); } catch { /* ignore */ }

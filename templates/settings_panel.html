@@ -54,7 +54,10 @@
                         <button type="button" class="menu_button" id="rmr_discard_checkpoint"><i class="fa-solid fa-trash-can"></i> <span data-i18n="rmr_discard">Discard</span></button>
                     </div>
                 </div>
-                <label class="checkbox_label" for="rmr_auto_stock_chunks"><input id="rmr_auto_stock_chunks" class="checkbox" type="checkbox"><span data-i18n="rmr_auto_stock_chunks">Auto-stock chunk summaries in the background</span></label>
+                <div class="flex-container flexGap5 marginTopBot5 alignItemsCenter">
+                    <label class="checkbox_label" for="rmr_auto_stock_chunks"><input id="rmr_auto_stock_chunks" class="checkbox" type="checkbox"><span data-i18n="rmr_auto_stock_chunks">Auto-stock chunk summaries in the background</span></label>
+                    <button type="button" class="menu_button" id="rmr_stock_now"><i class="fa-solid fa-cubes"></i> <span data-i18n="rmr_stock_now">Stock now</span></button>
+                </div>
                 <div id="rmr_stock_status" class="rmr-stock-status" style="display:none">
                     <span id="rmr_stock_status_text" class="rmr-pending-text"></span>
                     <div class="rmr-pending-actions">
