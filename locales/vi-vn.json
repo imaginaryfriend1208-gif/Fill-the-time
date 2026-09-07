@@ -103,5 +103,6 @@
   "rmr_stocking_now": "Đang stock chạy ngầm...",
   "rmr_stock_now": "Stock ngay",
   "rmr_stock_ranges_hint": "Bấm vào điểm merge để đặt làm End ID:",
-  "rmr_end_id_set": "Đã đặt End Message ID ="
+  "rmr_end_id_set": "Đã đặt End Message ID =",
+  "rmr_stock_profile": "Profile cho stock (chạy ngầm; bỏ trống = dùng chung)"
 }

@@ -69,7 +69,7 @@ const defaults = {
     is_enabled: true, show_buttons: [Buttons.STOP], memory_system_prompt: SYSTEM_PROMPT,
     memory_prompt_template: USER_PROMPT, rate_limit: 0, profile: null, hide_chapter: true,
     add_chunk_summaries: false, use_chunk_summaries_as_chapter: false, archive_on_accept: true,
-    auto_stock_chunks: false,
+    auto_stock_chunks: false, stock_profile: null,
     summarize_presets: [DEFAULT_PRESET, WRITER_DIARY_PRESET, CHARACTER_DIARY_PRESET], current_summarize_preset: DEFAULT_PRESET.id,
     inject_enabled: false, inject_depth: 0, inject_role: extension_prompt_roles.SYSTEM,
     inject_prompt: INJECT_PROMPT, rolling_settings_migrated: true, locale_override: 'auto',
@@ -112,9 +112,11 @@ export function changeCharaName() {}
 
 async function updateInjection() { (await import('./memories.js')).updateSummaryInjection(); }
 function populateProfiles() {
-    const select = $('#rmr_profile'); select.find('option:not(:first)').remove();
-    for (const profile of extension_settings.connectionManager?.profiles || []) select.append($('<option>').val(profile.id).text(profile.name));
-    select.val(settings.profile || '');
+    for (const [id, key] of [['#rmr_profile', 'profile'], ['#rmr_stock_profile', 'stock_profile']]) {
+        const select = $(id); select.find('option:not(:first)').remove();
+        for (const profile of extension_settings.connectionManager?.profiles || []) select.append($('<option>').val(profile.id).text(profile.name));
+        select.val(settings[key] || '');
+    }
 }
 
 async function loadVersionBadge() {
@@ -166,6 +168,7 @@ async function loadUI() {
     });
     $('#rmr_rate_limit').val(settings.rate_limit).off('change').on('change', function () { settings.rate_limit = Math.max(0, Number(this.value) || 0); this.value = settings.rate_limit; save(); });
     populateProfiles(); $('#rmr_profile').off('change').on('change', function () { settings.profile = this.value || null; save(); });
+    $('#rmr_stock_profile').off('change').on('change', function () { settings.stock_profile = this.value || null; save(); });
     $('#rmr_inject_enabled').prop('checked', settings.inject_enabled).off('change').on('change', async function () { settings.inject_enabled = this.checked; save(); await updateInjection(); });
     $('#rmr_inject_depth').val(settings.inject_depth).off('change').on('change', async function () { settings.inject_depth = Math.max(0, Number(this.value) || 0); save(); await updateInjection(); });
     const roles = $('#rmr_inject_role').empty();
@@ -210,7 +213,7 @@ async function loadUI() {
 export async function renderStockStatus() {
     const box = $('#rmr_stock_status'); if (!box.length) return;
     try {
-        const { getStockedChunks, isStocking } = await import('./memories.js');
+        const { getStockedChunks, isStocking, getRollingSummary } = await import('./memories.js');
         const entries = getStockedChunks();
         const stocking = isStocking();
         if (!entries.length && !stocking) { box.hide(); return; }
@@ -220,7 +223,7 @@ export async function renderStockStatus() {
         const ranges = $('#rmr_stock_ranges').empty();
         if (entries.length) {
             ranges.append($('<small class="rmr-stock-ranges-hint">').text(getText('rmr_stock_ranges_hint', 'Click a merge point to set it as the End ID:')));
-            const start = entries[0].fromMsgId;
+            const start = Math.min((getRollingSummary()?.endMsgId ?? -1) + 1, entries[0].fromMsgId);
             for (const entry of entries) {
                 ranges.append($('<button type="button" class="rmr-stock-range" title="Set End Message ID">')
                     .text(`${start}–${entry.toMsgId}`)

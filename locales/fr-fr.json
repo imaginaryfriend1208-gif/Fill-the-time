@@ -103,5 +103,6 @@
   "rmr_stocking_now": "Stockage en arrière-plan...",
   "rmr_stock_now": "Stocker maintenant",
   "rmr_stock_ranges_hint": "Cliquez sur un point de fusion pour le définir comme End ID :",
-  "rmr_end_id_set": "End Message ID défini sur"
+  "rmr_end_id_set": "End Message ID défini sur",
+  "rmr_stock_profile": "Profil de stockage (arrière-plan ; vide = identique)"
 }

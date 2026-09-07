@@ -349,7 +349,7 @@ export async function autoStockChunks({ force = false, verbose = false } = {}) {
     if (base >= chat.length - 1) { if (verbose) infoToast('Everything up to the latest message is already summarized or stocked.'); return false; }
     const chatId = context.chatId;
     stockInProgress = true;
-    commandArgs = { quiet: !verbose };
+    commandArgs = { quiet: !verbose, profile: settings.stock_profile || undefined };
     try {
         (await import('./settings.js')).renderStockStatus?.();
         const history = await processRange(base + 1, chat.length - 1);
@@ -387,15 +387,20 @@ export async function autoStockChunks({ force = false, verbose = false } = {}) {
     }
 }
 
-function takeUsableStock(oldEnd, target) {
-    const usable = [];
+async function buildStockSegments(oldEnd, target) {
+    const segments = [];
     let cursor = oldEnd + 1;
+    let usedStock = 0;
     for (const entry of stockedChunks) {
-        if (entry.fromMsgId === cursor && entry.toMsgId <= target) { usable.push(entry); cursor = entry.toMsgId + 1; }
-        else if (entry.toMsgId < cursor) continue;
-        else break;
+        if (entry.toMsgId < cursor || entry.fromMsgId < cursor) continue;
+        if (entry.toMsgId > target) break;
+        if (entry.fromMsgId > cursor) segments.push({ history: await processRange(cursor, entry.fromMsgId - 1) });
+        segments.push({ stock: entry.summary });
+        usedStock++;
+        cursor = entry.toMsgId + 1;
     }
-    return { usable, cursor };
+    if (cursor <= target) segments.push({ history: await processRange(cursor, target) });
+    return { segments, usedStock };
 }
 
 function pendingCheckpoint() { const value = getContext().chatMetadata?.[PENDING_KEY]; return value && typeof value === 'object' ? value : null; }
@@ -500,44 +505,50 @@ async function buildChunks(history) {
     return { pieces, tail: current };
 }
 
-async function summarizeHistory(history, target, options = {}) {
-    const stocked = Array.isArray(options.stockedSummaries) ? options.stockedSummaries.filter(Boolean) : [];
-    if (!history.length && !stocked.length) { warningToast('No visible content to summarize.'); return ''; }
+async function summarizeHistory(segments, target, options = {}) {
+    const ordered = [];
+    for (const segment of Array.isArray(segments) ? segments : []) {
+        if (segment?.stock) ordered.push({ type: 'stock', text: String(segment.stock) });
+        else if (Array.isArray(segment?.history) && segment.history.length) {
+            const { pieces, tail } = await buildChunks(segment.history);
+            for (const piece of [...pieces, ...(tail ? [tail] : [])]) ordered.push({ type: 'fresh', text: piece.text, startId: piece.startId });
+        }
+    }
+    if (!ordered.length) { warningToast('No visible content to summarize.'); return ''; }
     worldInfoCache = null;
-    const { pieces, tail } = await buildChunks(history);
-    const chunks = [...pieces, ...(tail ? [tail] : [])].map(piece => piece.text);
-    if (!chunks.length && !stocked.length) return '';
-    const start = history[0]?.index ?? 0;
-    const persistCheckpoint = options.persistCheckpoint !== false;
+    const fresh = ordered.filter(item => item.type === 'fresh');
+    const stockCount = ordered.length - fresh.length;
+    const start = fresh[0]?.startId ?? 0;
+    const persistCheckpoint = options.persistCheckpoint !== false && fresh.length > 0;
     const pending = persistCheckpoint ? pendingCheckpoint() : null;
     const checkpointType = options.checkpointType || 'forward';
     const pendingType = pending?.checkpointType || 'forward';
-    const totalPieces = stocked.length + chunks.length;
-    const needChunkPass = chunks.length > 1 || (stocked.length > 0 && chunks.length > 0);
-    let summaries = pending && pendingType === checkpointType && Number(pending.startMsgId) === start && Number(pending.targetMessageId) === target && Number(pending.chunkCount) === chunks.length && Array.isArray(pending.chunkSummaries) ? [...pending.chunkSummaries] : [];
-    if (summaries.length) infoToast(`Resuming from chunk ${summaries.length + 1}/${chunks.length}.`);
-    if (stocked.length) infoToast(`Using ${stocked.length} stocked chunk ${stocked.length === 1 ? 'summary' : 'summaries'}.`);
+    const totalPieces = ordered.length;
+    const needChunkPass = totalPieces > 1 && fresh.length > 0;
+    let summaries = pending && pendingType === checkpointType && Number(pending.startMsgId) === start && Number(pending.targetMessageId) === target && Number(pending.chunkCount) === fresh.length && Array.isArray(pending.chunkSummaries) ? [...pending.chunkSummaries] : [];
+    if (summaries.length) infoToast(`Resuming from chunk ${summaries.length + 1}/${fresh.length}.`);
+    if (stockCount) infoToast(`Using ${stockCount} stocked chunk ${stockCount === 1 ? 'summary' : 'summaries'}.`);
     if (needChunkPass) {
-        while (summaries.length < chunks.length) {
+        while (summaries.length < fresh.length) {
             const index = summaries.length;
-            await setProgress({ phase: 'chunks', current: stocked.length + index, total: totalPieces });
+            await setProgress({ phase: 'chunks', current: stockCount + index, total: totalPieces });
             try {
-                const result = await generateFromText(chunks[index], index + 1, false);
+                const result = await generateFromText(fresh[index].text, index + 1, false);
                 if (!result) throw new Error('Empty chunk summary');
                 summaries.push(result);
-                if (persistCheckpoint) await saveCheckpoint({ checkpointType, targetMessageId: target, startMsgId: start, chunkCount: chunks.length, chunkSummaries: summaries, stage: 'chunks' });
-                await setProgress({ phase: 'chunks', current: stocked.length + summaries.length, total: totalPieces });
+                if (persistCheckpoint) await saveCheckpoint({ checkpointType, targetMessageId: target, startMsgId: start, chunkCount: fresh.length, chunkSummaries: summaries, stage: 'chunks' });
+                await setProgress({ phase: 'chunks', current: stockCount + summaries.length, total: totalPieces });
             } catch (error) {
-                if (persistCheckpoint) await saveCheckpoint({ checkpointType, targetMessageId: target, startMsgId: start, chunkCount: chunks.length, chunkSummaries: summaries, stage: 'chunk', failedChunkIndex: index, error: error?.message || String(error) });
-                errorToast(persistCheckpoint ? `Summary failed at chunk ${index + 1}/${chunks.length}. Progress was saved.` : `Summary failed at chunk ${index + 1}/${chunks.length}.`);
+                if (persistCheckpoint) await saveCheckpoint({ checkpointType, targetMessageId: target, startMsgId: start, chunkCount: fresh.length, chunkSummaries: summaries, stage: 'chunk', failedChunkIndex: index, error: error?.message || String(error) });
+                errorToast(persistCheckpoint ? `Summary failed at chunk ${index + 1}/${fresh.length}. Progress was saved.` : `Summary failed at chunk ${index + 1}/${fresh.length}.`);
                 await setProgress(null);
                 return '';
             }
         }
     }
-    const freshCombined = needChunkPass ? summaries.join('\n\n') : chunks.join('\n\n');
-    const combined = [...stocked, freshCombined].filter(Boolean).join('\n\n');
-    const piecesAreSummaries = needChunkPass || (stocked.length > 0 && !chunks.length);
+    let freshIndex = 0;
+    const combined = ordered.map(item => item.type === 'stock' ? item.text : (needChunkPass ? summaries[freshIndex++] : item.text)).join('\n\n');
+    const piecesAreSummaries = needChunkPass || stockCount > 0;
     let result;
     try {
         if (piecesAreSummaries && settings.use_chunk_summaries_as_chapter) {
@@ -549,7 +560,7 @@ async function summarizeHistory(history, target, options = {}) {
         }
     }
     catch (error) {
-        if (persistCheckpoint) await saveCheckpoint({ checkpointType, targetMessageId: target, startMsgId: start, chunkCount: chunks.length, chunkSummaries: summaries, stage: 'final', error: error?.message || String(error) });
+        if (persistCheckpoint) await saveCheckpoint({ checkpointType, targetMessageId: target, startMsgId: start, chunkCount: fresh.length, chunkSummaries: summaries, stage: 'final', error: error?.message || String(error) });
         errorToast(persistCheckpoint ? 'Final summary failed. Chunk progress was saved.' : 'Final summary failed.');
         await setProgress(null);
         return '';
@@ -572,9 +583,8 @@ export async function generateRollingSummary(messageId, options = {}) {
     const oldEnd = rollingSummary?.endMsgId ?? -1;
     if (target <= oldEnd) { errorToast(`Choose a message after ${oldEnd}; earlier content is already summarized.`); return ''; }
     draftBases.set(target, { endMsgId: oldEnd, updatedAt: rollingSummary?.updatedAt || null, summary: rollingSummary?.summary || '' });
-    const { usable, cursor } = options.useStock === false ? { usable: [], cursor: oldEnd + 1 } : takeUsableStock(oldEnd, target);
-    const history = cursor <= target ? await processRange(cursor, target) : [];
-    return summarizeHistory(history, target, { stockedSummaries: usable.map(entry => entry.summary) });
+    const { segments } = options.useStock === false ? { segments: [{ history: await processRange(oldEnd + 1, target) }] } : await buildStockSegments(oldEnd, target);
+    return summarizeHistory(segments, target);
 }
 
 function summarySignature(value) {
@@ -592,7 +602,7 @@ export async function generateActiveSummaryReplacement(options = {}) {
     const start = base ? base.endMsgId + 1 : 0;
     const signature = summarySignature(active);
     regenerationBases.set(active.endMsgId, { signature, start, previousSummary: base?.summary || '' });
-    const result = await summarizeHistory(await processRange(start, active.endMsgId, { includeHidden: true }), active.endMsgId, { previousSummary: base?.summary || '', checkpointType: `regeneration:${signature}`, persistCheckpoint: false, addChunkComment: false });
+    const result = await summarizeHistory([{ history: await processRange(start, active.endMsgId, { includeHidden: true }) }], active.endMsgId, { previousSummary: base?.summary || '', checkpointType: `regeneration:${signature}`, persistCheckpoint: false, addChunkComment: false });
     if (result && summarySignature(rollingSummary) !== signature) {
         errorToast('The active summary changed during regeneration. Generate it again.');
         return '';
@@ -664,12 +674,7 @@ export async function acceptRollingSummary(text, endMsgId, archiveOld = true) {
     }
     await clearCheckpoint(target);
     if (stockedChunks.length) {
-        const chain = [];
-        let cursor = target + 1;
-        for (const entry of stockedChunks) {
-            if (entry.fromMsgId === cursor) { chain.push(entry); cursor = entry.toMsgId + 1; }
-        }
-        stockedChunks = chain;
+        stockedChunks = stockedChunks.filter(entry => entry.fromMsgId > target);
         await saveStock();
     }
     const chunkComment = pendingChunkComments.get(target);
