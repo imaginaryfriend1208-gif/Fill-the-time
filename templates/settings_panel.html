@@ -59,10 +59,13 @@
                     <button type="button" class="menu_button" id="rmr_stock_now"><i class="fa-solid fa-cubes"></i> <span data-i18n="rmr_stock_now">Stock now</span></button>
                 </div>
                 <div id="rmr_stock_status" class="rmr-stock-status" style="display:none">
-                    <span id="rmr_stock_status_text" class="rmr-pending-text"></span>
-                    <div class="rmr-pending-actions">
-                        <button type="button" class="menu_button" id="rmr_clear_stock"><i class="fa-solid fa-trash-can"></i> <span data-i18n="rmr_clear_stock">Clear stock</span></button>
+                    <div class="rmr-stock-status-row">
+                        <span id="rmr_stock_status_text" class="rmr-pending-text"></span>
+                        <div class="rmr-pending-actions">
+                            <button type="button" class="menu_button" id="rmr_clear_stock"><i class="fa-solid fa-trash-can"></i> <span data-i18n="rmr_clear_stock">Clear stock</span></button>
+                        </div>
                     </div>
+                    <div id="rmr_stock_ranges" class="rmr-stock-ranges" style="display:none"></div>
                 </div>
                 <p><small data-i18n="rmr_create_chapter_hint">Summarizes from the message after the active summary through the End ID. With 2+ stages, the range is split evenly by tokens and each stage merges into the rolling summary.</small></p>
             </div>

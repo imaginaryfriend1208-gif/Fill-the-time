@@ -217,6 +217,19 @@ export async function renderStockStatus() {
         const coverage = entries.length ? `${entries.length} ${getText('rmr_stocked_chunks', 'stocked chunks')} (${getText('rmr_through_message', 'Through message')} ${entries.at(-1).toMsgId})` : '';
         const working = stocking ? getText('rmr_stocking_now', 'Stocking in background...') : '';
         $('#rmr_stock_status_text').text([coverage, working].filter(Boolean).join(' · '));
+        const ranges = $('#rmr_stock_ranges').empty();
+        if (entries.length) {
+            ranges.append($('<small class="rmr-stock-ranges-hint">').text(getText('rmr_stock_ranges_hint', 'Click a chunk to set it as the End ID:')));
+            for (const entry of entries) {
+                ranges.append($('<button type="button" class="rmr-stock-range" title="Set End Message ID">')
+                    .text(`${entry.fromMsgId}–${entry.toMsgId}`)
+                    .on('click', () => {
+                        $('#rmr_create_chapter_end').val(entry.toMsgId);
+                        toastr.info(`${getText('rmr_end_id_set', 'End Message ID set to')} ${entry.toMsgId}`, 'Fill the Time');
+                    }));
+            }
+        }
+        ranges.toggle(entries.length > 0);
         box.find('#rmr_clear_stock').toggle(entries.length > 0);
         box.css('display', 'flex');
     } catch (error) { debug('Could not render stock status:', error); box.hide(); }
