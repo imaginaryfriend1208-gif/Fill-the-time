@@ -102,6 +102,6 @@
   "rmr_stocked_chunks": "segments stockés",
   "rmr_stocking_now": "Stockage en arrière-plan...",
   "rmr_stock_now": "Stocker maintenant",
-  "rmr_stock_ranges_hint": "Cliquez sur un segment pour le définir comme End ID :",
+  "rmr_stock_ranges_hint": "Cliquez sur un point de fusion pour le définir comme End ID :",
   "rmr_end_id_set": "End Message ID défini sur"
 }

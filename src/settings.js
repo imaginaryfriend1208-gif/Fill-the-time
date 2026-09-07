@@ -219,10 +219,11 @@ export async function renderStockStatus() {
         $('#rmr_stock_status_text').text([coverage, working].filter(Boolean).join(' · '));
         const ranges = $('#rmr_stock_ranges').empty();
         if (entries.length) {
-            ranges.append($('<small class="rmr-stock-ranges-hint">').text(getText('rmr_stock_ranges_hint', 'Click a chunk to set it as the End ID:')));
+            ranges.append($('<small class="rmr-stock-ranges-hint">').text(getText('rmr_stock_ranges_hint', 'Click a merge point to set it as the End ID:')));
+            const start = entries[0].fromMsgId;
             for (const entry of entries) {
                 ranges.append($('<button type="button" class="rmr-stock-range" title="Set End Message ID">')
-                    .text(`${entry.fromMsgId}–${entry.toMsgId}`)
+                    .text(`${start}–${entry.toMsgId}`)
                     .on('click', () => {
                         $('#rmr_create_chapter_end').val(entry.toMsgId);
                         toastr.info(`${getText('rmr_end_id_set', 'End Message ID set to')} ${entry.toMsgId}`, 'Fill the Time');

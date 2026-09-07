@@ -102,6 +102,6 @@
   "rmr_stocked_chunks": "chunk đã stock",
   "rmr_stocking_now": "Đang stock chạy ngầm...",
   "rmr_stock_now": "Stock ngay",
-  "rmr_stock_ranges_hint": "Bấm vào chunk để đặt làm End ID:",
+  "rmr_stock_ranges_hint": "Bấm vào điểm merge để đặt làm End ID:",
   "rmr_end_id_set": "Đã đặt End Message ID ="
 }
