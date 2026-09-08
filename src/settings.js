@@ -79,7 +79,7 @@ const defaults = {
     is_enabled: true, show_buttons: [Buttons.STOP], memory_system_prompt: SYSTEM_PROMPT,
     memory_prompt_template: USER_PROMPT, rate_limit: 0, profile: null, hide_chapter: true,
     add_chunk_summaries: false, use_chunk_summaries_as_chapter: false, archive_on_accept: true,
-    auto_stock_chunks: false, stock_profile: null,
+    auto_stock_chunks: false, stock_profile: null, stock_context_limit: 0,
     chunk_system_prompt: CHUNK_SYSTEM_PROMPT, chunk_prompt_template: CHUNK_USER_PROMPT, use_custom_chunk_prompts: false,
     summarize_presets: [DEFAULT_PRESET, WRITER_DIARY_PRESET, CHARACTER_DIARY_PRESET], current_summarize_preset: DEFAULT_PRESET.id,
     inject_enabled: false, inject_depth: 0, inject_role: extension_prompt_roles.SYSTEM,
@@ -182,6 +182,7 @@ async function loadUI() {
     $('#rmr_rate_limit').val(settings.rate_limit).off('change').on('change', function () { settings.rate_limit = Math.max(0, Number(this.value) || 0); this.value = settings.rate_limit; save(); });
     populateProfiles(); $('#rmr_profile').off('change').on('change', function () { settings.profile = this.value || null; save(); });
     $('#rmr_stock_profile').off('change').on('change', function () { settings.stock_profile = this.value || null; save(); });
+    $('#rmr_stock_context_limit').val(settings.stock_context_limit || '').off('change').on('change', function () { settings.stock_context_limit = Math.max(0, Number(this.value) || 0); this.value = settings.stock_context_limit || ''; save(); renderStockStatus(); });
     $('#rmr_inject_enabled').prop('checked', settings.inject_enabled).off('change').on('change', async function () { settings.inject_enabled = this.checked; save(); await updateInjection(); });
     $('#rmr_inject_depth').val(settings.inject_depth).off('change').on('change', async function () { settings.inject_depth = Math.max(0, Number(this.value) || 0); save(); await updateInjection(); });
     const roles = $('#rmr_inject_role').empty();
@@ -255,8 +256,9 @@ export async function renderStockStatus() {
         ranges.toggle(entries.length > 0);
         const tokensBox = $('#rmr_stock_tokens');
         if (entries.length) {
+            const { getStockContextLimit } = await import('./memories.js');
             const total = await countTokens(entries.map(entry => entry.summary).join('\n\n'));
-            const maxContext = Math.max(1, Number(getContext().maxContext || 4096));
+            const maxContext = Math.max(1, getStockContextLimit());
             const percent = Math.min(100, Math.round((total / maxContext) * 100));
             $('#rmr_stock_tokens_text').text(`${getText('rmr_stock_tokens', 'Stocked summary size')}: ${total} ${getText('rmr_tokens', 'tokens')} (~${percent}% ${getText('rmr_of_context', 'of context')})`);
             $('#rmr_stock_tokens_fill').css('width', `${percent}%`);

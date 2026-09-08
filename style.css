@@ -21,6 +21,8 @@
 .rmr-stock-card-header i { opacity:.8; }
 .rmr-stock-card-actions { display:flex; gap:6px; margin-left:auto; }
 .rmr-stock-card .checkbox_label { margin:0; }
+.rmr-chunk-size-row { display:flex; flex-direction:column; gap:3px; max-width:280px; }
+.rmr-chunk-size-row small { color:var(--SmartThemeQuoteColor); }
 .rmr-stock-body { display:flex; flex-direction:column; gap:6px; padding-top:6px; border-top:1px dashed var(--SmartThemeBorderColor); }
 .rmr-stock-info { color:var(--SmartThemeQuoteColor); font-size:12px; }
 .rmr-stock-ranges { display:flex; align-items:center; flex-wrap:wrap; gap:5px; }

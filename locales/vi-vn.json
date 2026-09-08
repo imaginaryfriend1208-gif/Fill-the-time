@@ -113,5 +113,6 @@
   "rmr_chunk_stock": "Kho Chunk",
   "rmr_stock_from": "bắt đầu từ tin",
   "rmr_stock_tokens": "Dung lượng tóm tắt đã stock",
-  "rmr_of_context": "context"
+  "rmr_of_context": "context",
+  "rmr_stock_context_limit": "Ngân sách token cho thanh đo bên dưới (0 = context của model), ví dụ 100000"
 }

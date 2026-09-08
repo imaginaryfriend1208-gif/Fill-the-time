@@ -360,7 +360,7 @@ export async function autoStockChunks({ force = false, verbose = false } = {}) {
             if (verbose) {
                 let tokens = 0;
                 try { tokens = tail ? await context.getTokenCountAsync(tail.text) : 0; } catch { tokens = Math.ceil((tail?.text || '').length / 4); }
-                const maxTokens = Math.max(100, Number(context.maxContext || 4096) - 100);
+                const maxTokens = getChunkTokenLimit(context);
                 infoToast(`Not enough new content for a full chunk yet (~${tokens}/${maxTokens} tokens since message ${base + 1}). The tail is summarized directly when you create the chapter.`);
             }
             return false;
@@ -493,9 +493,18 @@ async function generateFromText(content, chunk = 0, includePrevious = true, prev
     } finally { isInternalGeneration = false; }
 }
 
+export function getChunkTokenLimit(context = getContext()) {
+    return Math.max(100, Number(context.maxContext || 4096) - 100);
+}
+
+export function getStockContextLimit() {
+    const custom = Number(settings?.stock_context_limit) || 0;
+    return custom > 0 ? custom : Math.max(1, Number(getContext().maxContext || 4096));
+}
+
 async function buildChunks(history) {
     const context = getContext();
-    const maxTokens = Math.max(100, Number(context.maxContext || 4096) - 100);
+    const maxTokens = getChunkTokenLimit(context);
     const pieces = [];
     let current = null;
     for (const message of history) {
@@ -718,7 +727,7 @@ export async function autoSplitSummarize(messageId, stages = 1, options = {}) {
             try { counts.push(await context.getTokenCountAsync(text)); } catch { counts.push(Math.ceil(text.length / 4)); }
         }
         const total = counts.reduce((sum, value) => sum + value, 0);
-        const maxTokens = Math.max(100, Number(context.maxContext || 4096) - 100);
+        const maxTokens = getChunkTokenLimit(context);
         let count = Math.max(0, Number(stages) || 0);
         if (!count) count = Math.max(1, Math.ceil(total / maxTokens));
         count = Math.min(count, target - oldEnd);

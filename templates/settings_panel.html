@@ -64,6 +64,10 @@
                         </div>
                     </div>
                     <label class="checkbox_label" for="rmr_auto_stock_chunks"><input id="rmr_auto_stock_chunks" class="checkbox" type="checkbox"><span data-i18n="rmr_auto_stock_chunks">Auto-stock chunk summaries in the background</span></label>
+                    <div class="rmr-chunk-size-row">
+                        <label for="rmr_stock_context_limit"><small data-i18n="rmr_stock_context_limit">Token budget for the meter below (0 = model context), e.g. 100000</small></label>
+                        <input class="text_pole widthNatural" id="rmr_stock_context_limit" type="number" min="0" step="1000" placeholder="auto">
+                    </div>
                     <div id="rmr_stock_status" class="rmr-stock-body" style="display:none">
                         <span id="rmr_stock_status_text" class="rmr-stock-info"></span>
                         <div id="rmr_stock_ranges" class="rmr-stock-ranges" style="display:none"></div>
