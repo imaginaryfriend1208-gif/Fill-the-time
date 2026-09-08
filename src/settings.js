@@ -229,6 +229,21 @@ async function loadUI() {
     initTutorialUI(); await renderActiveSummary(); await renderArchiveList(); renderPendingCheckpoint(); renderStockStatus(); debug('Rolling summary UI loaded');
 }
 
+function renderStockMiniBar(state) {
+    let bar = $('#rmr_stock_minibar');
+    if (!state) { bar.hide(); return; }
+    if (!bar.length) {
+        const anchor = $('#send_form');
+        if (!anchor.length) return;
+        bar = $('<div id="rmr_stock_minibar" title=""><div id="rmr_stock_minibar_fill"></div></div>');
+        anchor.before(bar);
+    }
+    const { total, maxContext, percent, stocking } = state;
+    bar.attr('title', `Fill the Time · ${getText('rmr_stock_tokens', 'Stocked summary size')}: ${total} / ${maxContext} ${getText('rmr_tokens', 'tokens')} (~${percent}%)${stocking ? ` · ${getText('rmr_stocking_now', 'Stocking in background...')}` : ''}`);
+    bar.toggleClass('rmr-stocking', !!stocking).show();
+    $('#rmr_stock_minibar_fill').css('width', `${Math.max(2, percent)}%`);
+}
+
 export async function renderStockStatus() {
     const box = $('#rmr_stock_status'); if (!box.length) return;
     try {
@@ -236,7 +251,7 @@ export async function renderStockStatus() {
         const entries = getStockedChunks();
         const stocking = isStocking();
         $('#rmr_clear_stock').toggle(entries.length > 0);
-        if (!entries.length && !stocking) { box.hide(); return; }
+        if (!entries.length && !stocking) { box.hide(); renderStockMiniBar(null); return; }
         const start = entries.length ? Math.min((getRollingSummary()?.endMsgId ?? -1) + 1, entries[0].fromMsgId) : (getRollingSummary()?.endMsgId ?? -1) + 1;
         const coverage = entries.length ? `${entries.length} ${getText('rmr_stocked_chunks', 'stocked chunks')} · ${getText('rmr_stock_from', 'from message')} ${start}` : '';
         const working = stocking ? getText('rmr_stocking_now', 'Stocking in background...') : '';
@@ -263,9 +278,10 @@ export async function renderStockStatus() {
             $('#rmr_stock_tokens_text').text(`${getText('rmr_stock_tokens', 'Stocked summary size')}: ${total} / ${maxContext} ${getText('rmr_tokens', 'tokens')} (~${percent}%)`);
             $('#rmr_stock_tokens_fill').css('width', `${Math.max(2, percent)}%`).attr('title', `${percent}%`);
             tokensBox.show();
-        } else tokensBox.hide();
+            renderStockMiniBar({ total, maxContext, percent, stocking });
+        } else { tokensBox.hide(); renderStockMiniBar(stocking ? { total: 0, maxContext: 1, percent: 0, stocking } : null); }
         box.css('display', 'flex');
-    } catch (error) { debug('Could not render stock status:', error); box.hide(); }
+    } catch (error) { debug('Could not render stock status:', error); box.hide(); renderStockMiniBar(null); }
 }
 
 export function updateChapterProgress(state) {

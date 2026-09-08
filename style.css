@@ -21,6 +21,12 @@
 .rmr-stock-card-header i { opacity:.8; }
 .rmr-stock-card-actions { display:flex; gap:6px; margin-left:auto; }
 .rmr-stock-card .checkbox_label { margin:0; }
+.rmr-connection-row { align-items:stretch; gap:10px; }
+.rmr-connection-row .rmr-field { display:flex; flex-direction:column; min-width:0; }
+.rmr-connection-row .rmr-field label { flex:1; display:flex; align-items:flex-end; margin-bottom:3px; }
+.rmr-connection-row .rmr-field label small { color:var(--SmartThemeQuoteColor); line-height:1.3; }
+.rmr-connection-row .rmr-field select, .rmr-connection-row .rmr-field input { width:100%; box-sizing:border-box; margin-top:auto; }
+@media(max-width:700px){.rmr-connection-row{flex-direction:column}}
 .rmr-chunk-size-row { display:flex; flex-direction:column; gap:3px; max-width:280px; }
 .rmr-chunk-size-row small { color:var(--SmartThemeQuoteColor); }
 .rmr-stock-body { display:flex; flex-direction:column; gap:6px; padding-top:6px; border-top:1px dashed var(--SmartThemeBorderColor); }
@@ -30,6 +36,10 @@
 .rmr-stock-range { min-width:34px; padding:2px 9px; border:1px solid var(--SmartThemeBorderColor); border-radius:999px; background:none; color:var(--SmartThemeEmColor); font:600 11px/1.6 monospace; text-align:center; cursor:pointer; }
 .rmr-stock-range:hover { border-color:var(--SmartThemeEmColor); background:var(--SmartThemeBorderColor); }
 .rmr-stock-tokens { display:flex; flex-direction:column; gap:4px; }
+#rmr_stock_minibar { display:none; height:4px; margin:0 5px 2px; border-radius:999px; background:rgba(128,128,128,.22); overflow:hidden; cursor:help; }
+#rmr_stock_minibar_fill { height:100%; width:0%; border-radius:999px; background:linear-gradient(90deg, var(--SmartThemeQuoteColor, #7aa2f7), var(--SmartThemeEmColor, #f7768e)); transition:width .4s ease; }
+#rmr_stock_minibar.rmr-stocking #rmr_stock_minibar_fill { animation:rmrStockPulse 1.2s ease-in-out infinite; }
+@keyframes rmrStockPulse { 0%,100%{opacity:1} 50%{opacity:.45} }
 .rmr-manual-chapter .flex-container.marginTopBot5 { gap:10px; }
 .rmr-manual-chapter label > small { display:block; margin-bottom:3px; color:var(--SmartThemeQuoteColor); }
 .rmr-manual-chapter input.text_pole { width:100%; box-sizing:border-box; }
