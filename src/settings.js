@@ -234,17 +234,18 @@ export async function renderStockStatus() {
         const { getStockedChunks, isStocking, getRollingSummary } = await import('./memories.js');
         const entries = getStockedChunks();
         const stocking = isStocking();
+        $('#rmr_clear_stock').toggle(entries.length > 0);
         if (!entries.length && !stocking) { box.hide(); return; }
-        const coverage = entries.length ? `${entries.length} ${getText('rmr_stocked_chunks', 'stocked chunks')} (${getText('rmr_through_message', 'Through message')} ${entries.at(-1).toMsgId})` : '';
+        const start = entries.length ? Math.min((getRollingSummary()?.endMsgId ?? -1) + 1, entries[0].fromMsgId) : (getRollingSummary()?.endMsgId ?? -1) + 1;
+        const coverage = entries.length ? `${entries.length} ${getText('rmr_stocked_chunks', 'stocked chunks')} · ${getText('rmr_stock_from', 'from message')} ${start}` : '';
         const working = stocking ? getText('rmr_stocking_now', 'Stocking in background...') : '';
         $('#rmr_stock_status_text').text([coverage, working].filter(Boolean).join(' · '));
         const ranges = $('#rmr_stock_ranges').empty();
         if (entries.length) {
             ranges.append($('<small class="rmr-stock-ranges-hint">').text(getText('rmr_stock_ranges_hint', 'Click a merge point to set it as the End ID:')));
-            const start = Math.min((getRollingSummary()?.endMsgId ?? -1) + 1, entries[0].fromMsgId);
             for (const entry of entries) {
                 ranges.append($('<button type="button" class="rmr-stock-range" title="Set End Message ID">')
-                    .text(`${start}–${entry.toMsgId}`)
+                    .text(entry.toMsgId)
                     .on('click', () => {
                         $('#rmr_create_chapter_end').val(entry.toMsgId);
                         toastr.info(`${getText('rmr_end_id_set', 'End Message ID set to')} ${entry.toMsgId}`, 'Fill the Time');
@@ -252,7 +253,15 @@ export async function renderStockStatus() {
             }
         }
         ranges.toggle(entries.length > 0);
-        box.find('#rmr_clear_stock').toggle(entries.length > 0);
+        const tokensBox = $('#rmr_stock_tokens');
+        if (entries.length) {
+            const total = await countTokens(entries.map(entry => entry.summary).join('\n\n'));
+            const maxContext = Math.max(1, Number(getContext().maxContext || 4096));
+            const percent = Math.min(100, Math.round((total / maxContext) * 100));
+            $('#rmr_stock_tokens_text').text(`${getText('rmr_stock_tokens', 'Stocked summary size')}: ${total} ${getText('rmr_tokens', 'tokens')} (~${percent}% ${getText('rmr_of_context', 'of context')})`);
+            $('#rmr_stock_tokens_fill').css('width', `${percent}%`);
+            tokensBox.show();
+        } else tokensBox.hide();
         box.css('display', 'flex');
     } catch (error) { debug('Could not render stock status:', error); box.hide(); }
 }

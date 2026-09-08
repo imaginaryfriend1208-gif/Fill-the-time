@@ -109,5 +109,9 @@
   "rmr_stock_now": "Stock ngay",
   "rmr_stock_ranges_hint": "Bấm vào điểm merge để đặt làm End ID:",
   "rmr_end_id_set": "Đã đặt End Message ID =",
-  "rmr_stock_profile": "Profile cho stock (chạy ngầm; bỏ trống = dùng chung)"
+  "rmr_stock_profile": "Profile cho stock (chạy ngầm; bỏ trống = dùng chung)",
+  "rmr_chunk_stock": "Kho Chunk",
+  "rmr_stock_from": "bắt đầu từ tin",
+  "rmr_stock_tokens": "Dung lượng tóm tắt đã stock",
+  "rmr_of_context": "context"
 }

@@ -109,5 +109,9 @@
   "rmr_stock_now": "Stocker maintenant",
   "rmr_stock_ranges_hint": "Cliquez sur un point de fusion pour le définir comme End ID :",
   "rmr_end_id_set": "End Message ID défini sur",
-  "rmr_stock_profile": "Profil de stockage (arrière-plan ; vide = identique)"
+  "rmr_stock_profile": "Profil de stockage (arrière-plan ; vide = identique)",
+  "rmr_chunk_stock": "Stock de segments",
+  "rmr_stock_from": "à partir du message",
+  "rmr_stock_tokens": "Taille des résumés stockés",
+  "rmr_of_context": "du contexte"
 }

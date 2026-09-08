@@ -54,18 +54,24 @@
                         <button type="button" class="menu_button" id="rmr_discard_checkpoint"><i class="fa-solid fa-trash-can"></i> <span data-i18n="rmr_discard">Discard</span></button>
                     </div>
                 </div>
-                <div class="flex-container flexGap5 marginTopBot5 alignItemsCenter">
-                    <label class="checkbox_label" for="rmr_auto_stock_chunks"><input id="rmr_auto_stock_chunks" class="checkbox" type="checkbox"><span data-i18n="rmr_auto_stock_chunks">Auto-stock chunk summaries in the background</span></label>
-                    <button type="button" class="menu_button" id="rmr_stock_now"><i class="fa-solid fa-cubes"></i> <span data-i18n="rmr_stock_now">Stock now</span></button>
-                </div>
-                <div id="rmr_stock_status" class="rmr-stock-status" style="display:none">
-                    <div class="rmr-stock-status-row">
-                        <span id="rmr_stock_status_text" class="rmr-pending-text"></span>
-                        <div class="rmr-pending-actions">
-                            <button type="button" class="menu_button" id="rmr_clear_stock"><i class="fa-solid fa-trash-can"></i> <span data-i18n="rmr_clear_stock">Clear stock</span></button>
+                <div class="rmr-stock-card">
+                    <div class="rmr-stock-card-header">
+                        <i class="fa-solid fa-cubes"></i>
+                        <span data-i18n="rmr_chunk_stock">Chunk Stock</span>
+                        <div class="rmr-stock-card-actions">
+                            <button type="button" class="menu_button" id="rmr_stock_now"><i class="fa-solid fa-play"></i> <span data-i18n="rmr_stock_now">Stock now</span></button>
+                            <button type="button" class="menu_button" id="rmr_clear_stock" style="display:none"><i class="fa-solid fa-trash-can"></i> <span data-i18n="rmr_clear_stock">Clear stock</span></button>
                         </div>
                     </div>
-                    <div id="rmr_stock_ranges" class="rmr-stock-ranges" style="display:none"></div>
+                    <label class="checkbox_label" for="rmr_auto_stock_chunks"><input id="rmr_auto_stock_chunks" class="checkbox" type="checkbox"><span data-i18n="rmr_auto_stock_chunks">Auto-stock chunk summaries in the background</span></label>
+                    <div id="rmr_stock_status" class="rmr-stock-body" style="display:none">
+                        <span id="rmr_stock_status_text" class="rmr-stock-info"></span>
+                        <div id="rmr_stock_ranges" class="rmr-stock-ranges" style="display:none"></div>
+                        <div id="rmr_stock_tokens" class="rmr-stock-tokens" style="display:none">
+                            <small id="rmr_stock_tokens_text" class="rmr-stock-info"></small>
+                            <div class="rmr-chapter-progress-track"><div id="rmr_stock_tokens_fill" class="rmr-chapter-progress-fill"></div></div>
+                        </div>
+                    </div>
                 </div>
                 <p><small data-i18n="rmr_create_chapter_hint">Summarizes from the message after the active summary through the End ID. With 2+ stages, the range is split evenly by tokens and each stage merges into the rolling summary.</small></p>
             </div>
