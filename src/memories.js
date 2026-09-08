@@ -467,8 +467,12 @@ async function generateFromText(content, chunk = 0, includePrevious = true, prev
     try {
         const context = getContext();
         const previous = includePrevious ? (previousOverride ?? rollingSummary?.summary ?? '') : '';
-        let userPrompt = String(settings.memory_prompt_template || '').replace(/{{content}}/gi, String(content || '').trim()).replace(/{{previousSummary}}/gi, previous);
-        let systemPrompt = String(settings.memory_system_prompt || '').replace(/{{content}}/gi, String(content || '').trim()).replace(/{{previousSummary}}/gi, previous);
+        const isChunkPass = !includePrevious;
+        const useChunkPrompts = isChunkPass && settings.use_custom_chunk_prompts;
+        const userTemplate = useChunkPrompts ? settings.chunk_prompt_template : settings.memory_prompt_template;
+        const systemTemplate = useChunkPrompts ? settings.chunk_system_prompt : settings.memory_system_prompt;
+        let userPrompt = String(userTemplate || '').replace(/{{content}}/gi, String(content || '').trim()).replace(/{{previousSummary}}/gi, previous);
+        let systemPrompt = String(systemTemplate || '').replace(/{{content}}/gi, String(content || '').trim()).replace(/{{previousSummary}}/gi, previous);
         userPrompt = await substituteWorldInfo(userPrompt);
         systemPrompt = await substituteWorldInfo(systemPrompt);
         userPrompt = context.substituteParams(userPrompt, context.name1, context.name2);

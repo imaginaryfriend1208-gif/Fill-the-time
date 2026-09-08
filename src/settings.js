@@ -23,6 +23,16 @@ const USER_PROMPT = `<previous_summary>
 Merge the previous summary and new events into ONE concise cumulative summary of the entire story so far. If the previous summary is empty, summarize only the new events. Return one plaintext block without bullets or markdown.
 
 The updated cumulative summary is:`;
+const CHUNK_SYSTEM_PROMPT = `<role>You condense one portion of an ongoing story.</role>
+<task>Summarize the given events into a compact, self-contained digest.</task>
+<instructions>Preserve plot developments, character actions, decisions, relationships, reveals, and unresolved threads in chronological order. Keep names, dates, and concrete facts. Exclude minor description and dialogue excerpts. Return plain unformatted text only.</instructions>`;
+const CHUNK_USER_PROMPT = `<events>
+{{content}}
+</events>
+
+Summarize the events above into ONE compact chronological digest. Return one plaintext block without bullets or markdown.
+
+The digest is:`;
 const INJECT_PROMPT = `<story_summary>
 {{fillthetime}}
 </story_summary>
@@ -70,6 +80,7 @@ const defaults = {
     memory_prompt_template: USER_PROMPT, rate_limit: 0, profile: null, hide_chapter: true,
     add_chunk_summaries: false, use_chunk_summaries_as_chapter: false, archive_on_accept: true,
     auto_stock_chunks: false, stock_profile: null,
+    chunk_system_prompt: CHUNK_SYSTEM_PROMPT, chunk_prompt_template: CHUNK_USER_PROMPT, use_custom_chunk_prompts: false,
     summarize_presets: [DEFAULT_PRESET, WRITER_DIARY_PRESET, CHARACTER_DIARY_PRESET], current_summarize_preset: DEFAULT_PRESET.id,
     inject_enabled: false, inject_depth: 0, inject_role: extension_prompt_roles.SYSTEM,
     inject_prompt: INJECT_PROMPT, rolling_settings_migrated: true, locale_override: 'auto',
@@ -145,6 +156,8 @@ async function loadUI() {
     localeSelect.val(settings.locale_override || 'auto').off('change').on('change', function () { changeLocale(this.value); });
     $('#rmr_memory_system_prompt').val(settings.memory_system_prompt).attr('placeholder', SYSTEM_PROMPT);
     $('#rmr_memory_prompt_template').val(settings.memory_prompt_template).attr('placeholder', USER_PROMPT);
+    $('#rmr_chunk_system_prompt').val(settings.chunk_system_prompt).attr('placeholder', CHUNK_SYSTEM_PROMPT);
+    $('#rmr_chunk_prompt_template').val(settings.chunk_prompt_template).attr('placeholder', CHUNK_USER_PROMPT);
     $('#rmr_inject_prompt').val(settings.inject_prompt).attr('placeholder', INJECT_PROMPT);
     $('#rmr_chapter_button').prop('checked', settings.show_buttons.includes(Buttons.STOP)).off('change').on('change', function () { settings.show_buttons = this.checked ? [Buttons.STOP] : []; save(); resetMessageButtons(); });
     for (const key of ['hide_chapter','add_chunk_summaries','use_chunk_summaries_as_chapter','archive_on_accept']) $(`#rmr_${key}`).prop('checked', !!settings[key]).off('change').on('change', function () { settings[key] = this.checked; save(); });
@@ -177,6 +190,11 @@ async function loadUI() {
     $('#rmr_inject_prompt').off('change').on('change', async function () { settings.inject_prompt = this.value || INJECT_PROMPT; save(); await updateInjection(); });
     $('#rmr_memory_system_prompt').off('change').on('change', function () { settings.memory_system_prompt = this.value || SYSTEM_PROMPT; save(); presetUI(); });
     $('#rmr_memory_prompt_template').off('change').on('change', function () { settings.memory_prompt_template = this.value || USER_PROMPT; save(); presetUI(); });
+    $('#rmr_chunk_system_prompt').off('change').on('change', function () { settings.chunk_system_prompt = this.value || CHUNK_SYSTEM_PROMPT; save(); });
+    $('#rmr_chunk_prompt_template').off('change').on('change', function () { settings.chunk_prompt_template = this.value || CHUNK_USER_PROMPT; save(); });
+    const syncChunkFields = () => $('#rmr_chunk_prompt_fields').toggle(!!settings.use_custom_chunk_prompts);
+    $('#rmr_use_custom_chunk_prompts').prop('checked', !!settings.use_custom_chunk_prompts).off('change').on('change', function () { settings.use_custom_chunk_prompts = this.checked; save(); syncChunkFields(); });
+    syncChunkFields();
     $('#rmr_create_chapter').off('click').on('click', async function () {
         const button = $(this);
         if (button.prop('disabled')) return;

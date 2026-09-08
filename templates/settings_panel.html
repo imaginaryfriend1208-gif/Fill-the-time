@@ -116,10 +116,31 @@
 
             <h4 data-i18n="rmr_summarization_prompts">Summarization Prompts</h4>
             <div class="rmr-extension_block flex-container flexFlowColumn">
-                <label for="rmr_memory_system_prompt"><small data-i18n="rmr_system_prompt">System Prompt — supports {{worldInfo}} (constant lorebook entries) and card macros like {{description}}, {{personality}}, {{mesExamples}}</small></label>
-                <textarea rows="5" class="margin0 text_pole textarea_compact" id="rmr_memory_system_prompt"></textarea>
-                <label for="rmr_memory_prompt_template"><small data-i18n="rmr_user_prompt">User Prompt — supports {{previousSummary}}, {{content}} and {{worldInfo}}</small></label>
-                <textarea rows="8" class="margin0 text_pole textarea_compact" id="rmr_memory_prompt_template"></textarea>
+                <div class="rmr-prompt-card">
+                    <div class="rmr-prompt-card-header">
+                        <i class="fa-solid fa-object-group"></i>
+                        <span data-i18n="rmr_merge_prompts">Merge Prompt (final rolling summary)</span>
+                    </div>
+                    <p class="rmr-prompt-card-hint"><small data-i18n="rmr_merge_prompts_hint">Combines the previous summary with new events into the final chapter. Macros: {{previousSummary}}, {{content}}, {{worldInfo}} (constant lorebook entries) and card macros like {{description}}, {{personality}}, {{mesExamples}}.</small></p>
+                    <label for="rmr_memory_system_prompt"><small data-i18n="rmr_system_prompt">System Prompt</small></label>
+                    <textarea rows="5" class="margin0 text_pole textarea_compact" id="rmr_memory_system_prompt"></textarea>
+                    <label for="rmr_memory_prompt_template"><small data-i18n="rmr_user_prompt">User Prompt</small></label>
+                    <textarea rows="8" class="margin0 text_pole textarea_compact" id="rmr_memory_prompt_template"></textarea>
+                </div>
+                <div class="rmr-prompt-card">
+                    <div class="rmr-prompt-card-header">
+                        <i class="fa-solid fa-cubes"></i>
+                        <span data-i18n="rmr_chunk_prompts">Chunk Prompt (per-chunk digests &amp; stocking)</span>
+                        <label class="checkbox_label rmr-prompt-card-toggle" for="rmr_use_custom_chunk_prompts"><input id="rmr_use_custom_chunk_prompts" class="checkbox" type="checkbox"><span data-i18n="rmr_use_custom_chunk_prompts">Use separate chunk prompts</span></label>
+                    </div>
+                    <p class="rmr-prompt-card-hint"><small data-i18n="rmr_chunk_prompts_hint">Condenses each chunk (including background stocking) before the merge. When off, the Merge Prompt is used with an empty {{previousSummary}}. Macros: {{content}}, {{worldInfo}}.</small></p>
+                    <div id="rmr_chunk_prompt_fields">
+                        <label for="rmr_chunk_system_prompt"><small data-i18n="rmr_system_prompt">System Prompt</small></label>
+                        <textarea rows="4" class="margin0 text_pole textarea_compact" id="rmr_chunk_system_prompt"></textarea>
+                        <label for="rmr_chunk_prompt_template"><small data-i18n="rmr_user_prompt">User Prompt</small></label>
+                        <textarea rows="6" class="margin0 text_pole textarea_compact" id="rmr_chunk_prompt_template"></textarea>
+                    </div>
+                </div>
             </div>
             <hr>
 
