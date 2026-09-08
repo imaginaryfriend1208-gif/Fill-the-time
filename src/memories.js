@@ -345,14 +345,16 @@ export async function autoStockChunks({ force = false, verbose = false } = {}) {
     const context = getContext();
     const chat = context.chat || [];
     if (!chat.length) { if (verbose) warningToast('No messages in this chat.'); return false; }
+    // Never stock the latest message: it is the one most likely to be swiped or regenerated.
+    const lastStockable = chat.length - 2;
     const base = Math.max(rollingSummary?.endMsgId ?? -1, stockedChunks.at(-1)?.toMsgId ?? -1);
-    if (base >= chat.length - 1) { if (verbose) infoToast('Everything up to the latest message is already summarized or stocked.'); return false; }
+    if (base >= lastStockable) { if (verbose) infoToast('Everything except the latest message is already summarized or stocked.'); return false; }
     const chatId = context.chatId;
     stockInProgress = true;
     commandArgs = { quiet: !verbose, profile: settings.stock_profile || undefined };
     try {
         (await import('./settings.js')).renderStockStatus?.();
-        const history = await processRange(base + 1, chat.length - 1);
+        const history = await processRange(base + 1, lastStockable);
         const { pieces, tail } = await buildChunks(history);
         if (!pieces.length) {
             if (verbose) {
