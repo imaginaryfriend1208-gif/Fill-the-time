@@ -260,8 +260,8 @@ export async function renderStockStatus() {
             const total = await countTokens(entries.map(entry => entry.summary).join('\n\n'));
             const maxContext = Math.max(1, getStockContextLimit());
             const percent = Math.min(100, Math.round((total / maxContext) * 100));
-            $('#rmr_stock_tokens_text').text(`${getText('rmr_stock_tokens', 'Stocked summary size')}: ${total} ${getText('rmr_tokens', 'tokens')} (~${percent}% ${getText('rmr_of_context', 'of context')})`);
-            $('#rmr_stock_tokens_fill').css('width', `${percent}%`);
+            $('#rmr_stock_tokens_text').text(`${getText('rmr_stock_tokens', 'Stocked summary size')}: ${total} / ${maxContext} ${getText('rmr_tokens', 'tokens')} (~${percent}%)`);
+            $('#rmr_stock_tokens_fill').css('width', `${Math.max(2, percent)}%`).attr('title', `${percent}%`);
             tokensBox.show();
         } else tokensBox.hide();
         box.css('display', 'flex');

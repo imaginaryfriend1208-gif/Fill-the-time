@@ -13,8 +13,8 @@
 .rmr-summaries-empty { color:var(--SmartThemeQuoteColor); font-style:italic; padding:10px; text-align:center; }
 .rmr-chapter-progress { display:flex; flex-direction:column; gap:5px; margin:5px 0; padding:8px 10px; border:1px solid var(--SmartThemeBorderColor); border-radius:6px; background:var(--SmartThemeBlurTintColor); }
 .rmr-chapter-progress-text { color:var(--SmartThemeEmColor); font-weight:600; }
-.rmr-chapter-progress-track { height:8px; border-radius:999px; background:var(--SmartThemeBorderColor); overflow:hidden; }
-.rmr-chapter-progress-fill { height:100%; width:0%; border-radius:999px; background:var(--SmartThemeEmColor); transition:width .3s ease; }
+.rmr-chapter-progress-track { position:relative; height:10px; border:1px solid rgba(128,128,128,.45); border-radius:999px; background:rgba(128,128,128,.18); overflow:hidden; }
+.rmr-chapter-progress-fill { height:100%; width:0%; border-radius:999px; background:linear-gradient(90deg, var(--SmartThemeQuoteColor, #7aa2f7), var(--SmartThemeEmColor, #f7768e)); box-shadow:inset 0 0 0 1px rgba(0,0,0,.15); transition:width .3s ease; }
 .rmr-pending-checkpoint { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:5px 0; padding:8px 10px; border:1px solid var(--SmartThemeEmColor); border-radius:6px; background:var(--SmartThemeBlurTintColor); }
 .rmr-stock-card { display:flex; flex-direction:column; gap:8px; margin:8px 0; padding:12px; border:1px solid var(--SmartThemeBorderColor); border-left:3px solid var(--SmartThemeEmColor); border-radius:8px; background:var(--SmartThemeBlurTintColor); }
 .rmr-stock-card-header { display:flex; align-items:center; flex-wrap:wrap; gap:8px; color:var(--SmartThemeEmColor); font-weight:600; }
