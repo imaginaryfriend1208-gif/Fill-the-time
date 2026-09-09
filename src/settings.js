@@ -179,6 +179,17 @@ async function loadUI() {
         const { clearStockedChunks } = await import('./memories.js');
         await clearStockedChunks();
     });
+    $('#rmr_view_stock').off('click').on('click', () => openStockViewer());
+    $('#rmr_restock').off('click').on('click', async function () {
+        if (!confirm(getText('rmr_restock_confirm', 'Discard the unmerged stocked chunks and stock again from the active summary?'))) return;
+        const button = $(this);
+        if (button.prop('disabled')) return;
+        button.prop('disabled', true);
+        try {
+            const { restockChunks } = await import('./memories.js');
+            await restockChunks();
+        } finally { button.prop('disabled', false); }
+    });
     $('#rmr_rate_limit').val(settings.rate_limit).off('change').on('change', function () { settings.rate_limit = Math.max(0, Number(this.value) || 0); this.value = settings.rate_limit; save(); });
     populateProfiles(); $('#rmr_profile').off('change').on('change', function () { settings.profile = this.value || null; save(); });
     $('#rmr_stock_profile').off('change').on('change', function () { settings.stock_profile = this.value || null; save(); });
@@ -247,19 +258,25 @@ function renderStockMiniBar(state) {
 export async function renderStockStatus() {
     const box = $('#rmr_stock_status'); if (!box.length) return;
     try {
-        const { getStockedChunks, isStocking, getRollingSummary } = await import('./memories.js');
+        const { getStockedChunks, isStocking, getRollingSummary, getStockContextLimit } = await import('./memories.js');
         const entries = getStockedChunks();
         const stocking = isStocking();
+        const activeEnd = getRollingSummary()?.endMsgId ?? -1;
+        const pending = entries.filter(entry => entry.fromMsgId > activeEnd);
         $('#rmr_clear_stock').toggle(entries.length > 0);
+        $('#rmr_view_stock').toggle(entries.length > 0);
+        $('#rmr_restock').toggle(pending.length > 0 && !stocking);
         if (!entries.length && !stocking) { box.hide(); renderStockMiniBar(null); return; }
-        const start = entries.length ? Math.min((getRollingSummary()?.endMsgId ?? -1) + 1, entries[0].fromMsgId) : (getRollingSummary()?.endMsgId ?? -1) + 1;
-        const coverage = entries.length ? `${entries.length} ${getText('rmr_stocked_chunks', 'stocked chunks')} · ${getText('rmr_stock_from', 'from message')} ${start}` : '';
-        const working = stocking ? getText('rmr_stocking_now', 'Stocking in background...') : '';
-        $('#rmr_stock_status_text').text([coverage, working].filter(Boolean).join(' · '));
+        const parts = [];
+        if (entries.length) parts.push(`${entries.length} ${getText('rmr_stocked_chunks', 'stocked chunks')}`);
+        if (pending.length) parts.push(`${getText('rmr_stock_from', 'from message')} ${pending[0].fromMsgId}`);
+        else if (entries.length) parts.push(getText('rmr_stock_all_merged', 'all already merged into the active summary'));
+        if (stocking) parts.push(getText('rmr_stocking_now', 'Stocking in background...'));
+        $('#rmr_stock_status_text').text(parts.join(' · '));
         const ranges = $('#rmr_stock_ranges').empty();
-        if (entries.length) {
+        if (pending.length) {
             ranges.append($('<small class="rmr-stock-ranges-hint">').text(getText('rmr_stock_ranges_hint', 'Click a merge point to set it as the End ID:')));
-            for (const entry of entries) {
+            for (const entry of pending) {
                 ranges.append($('<button type="button" class="rmr-stock-range" title="Set End Message ID">')
                     .text(entry.toMsgId)
                     .on('click', () => {
@@ -268,11 +285,10 @@ export async function renderStockStatus() {
                     }));
             }
         }
-        ranges.toggle(entries.length > 0);
+        ranges.toggle(pending.length > 0);
         const tokensBox = $('#rmr_stock_tokens');
-        if (entries.length) {
-            const { getStockContextLimit } = await import('./memories.js');
-            const total = await countTokens(entries.map(entry => entry.summary).join('\n\n'));
+        if (pending.length) {
+            const total = await countTokens(pending.map(entry => entry.summary).join('\n\n'));
             const maxContext = Math.max(1, getStockContextLimit());
             const percent = Math.min(100, Math.round((total / maxContext) * 100));
             $('#rmr_stock_tokens_text').text(`${getText('rmr_stock_tokens', 'Stocked summary size')}: ${total} / ${maxContext} ${getText('rmr_tokens', 'tokens')} (~${percent}%)`);
@@ -282,6 +298,49 @@ export async function renderStockStatus() {
         } else { tokensBox.hide(); renderStockMiniBar(stocking ? { total: 0, maxContext: 1, percent: 0, stocking } : null); }
         box.css('display', 'flex');
     } catch (error) { debug('Could not render stock status:', error); box.hide(); renderStockMiniBar(null); }
+}
+
+export async function openStockViewer() {
+    const { getStockedChunks, getRollingSummary, regenerateStockedChunk, deleteStockedChunk } = await import('./memories.js');
+    $('#rmr_stock_viewer').remove();
+    const overlay = $('<div id="rmr_stock_viewer" class="rmr-summary-popup-overlay"></div>');
+    const dialog = $('<div class="rmr-summary-popup"></div>');
+    const header = $(`<div class="rmr-summary-popup-header"><span class="rmr-summary-popup-title">${escapeHtml(getText('rmr_stock_viewer_title', 'Stocked chunk summaries'))}</span><span class="rmr-summary-popup-spacer"></span><button type="button" class="rmr-summary-popup-close"><i class="fa-solid fa-xmark"></i></button></div>`);
+    const body = $('<div class="rmr-summary-popup-body rmr-stock-viewer-body"></div>');
+    dialog.append(header, body);
+    overlay.append(dialog);
+    $('body').append(overlay);
+    const close = () => { $(document).off('keydown.fttStock'); overlay.remove(); };
+    header.find('.rmr-summary-popup-close').on('click', close);
+    overlay.on('click', event => { if (event.target === overlay[0]) close(); });
+    $(document).off('keydown.fttStock').on('keydown.fttStock', event => { if (event.key === 'Escape') close(); });
+    const rebuild = async () => {
+        body.empty();
+        const entries = getStockedChunks();
+        const activeEnd = getRollingSummary()?.endMsgId ?? -1;
+        if (!entries.length) { body.append($('<div class="rmr-summaries-empty">').text(getText('rmr_stock_empty', 'No stocked chunks yet.'))); return; }
+        for (const entry of entries) {
+            const merged = entry.toMsgId <= activeEnd;
+            const badge = merged ? getText('rmr_stock_merged', 'merged') : getText('rmr_stock_pending', 'pending');
+            const tokens = await countTokens(entry.summary);
+            const item = $(`<details class="rmr-archive-item rmr-stock-item${merged ? ' rmr-stock-item-merged' : ''}"><summary>#${entry.fromMsgId}–${entry.toMsgId} · ${tokens} ${escapeHtml(getText('rmr_tokens', 'tokens'))} · <span class="rmr-stock-badge">${escapeHtml(badge)}</span> · ${escapeHtml(new Date(entry.createdAt).toLocaleString())}</summary><pre></pre><div class="rmr-summary-actions"><button type="button" class="menu_button rmr-stock-regen"><i class="fa-solid fa-rotate"></i> ${escapeHtml(getText('rmr_regenerate', 'Regenerate'))}</button><button type="button" class="menu_button rmr-stock-delete"><i class="fa-solid fa-trash-can"></i> ${escapeHtml(getText('rmr_delete', 'Delete'))}</button></div></details>`);
+            item.find('pre').text(entry.summary);
+            item.find('.rmr-stock-regen').on('click', async function () {
+                const button = $(this);
+                if (button.prop('disabled')) return;
+                button.prop('disabled', true).html('<i class="fa-solid fa-spinner fa-spin"></i>');
+                try { await regenerateStockedChunk(entry.fromMsgId, entry.toMsgId); }
+                finally { if (overlay.closest('body').length) await rebuild(); }
+            });
+            item.find('.rmr-stock-delete').on('click', async () => {
+                if (!confirm(getText('rmr_delete_stock_confirm', 'Delete this stocked chunk summary?'))) return;
+                await deleteStockedChunk(entry.fromMsgId, entry.toMsgId);
+                await rebuild();
+            });
+            body.append(item);
+        }
+    };
+    await rebuild();
 }
 
 export function updateChapterProgress(state) {

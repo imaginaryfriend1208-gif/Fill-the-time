@@ -80,6 +80,7 @@ async function refreshViews() {
         await ui.renderActiveSummary?.();
         await ui.renderArchiveList?.();
         ui.renderPendingCheckpoint?.();
+        ui.renderStockStatus?.();
     } catch (error) { debug('Could not refresh summary UI:', error); }
     try {
         const messages = await import('./messages.js');
@@ -337,6 +338,63 @@ export async function clearStockedChunks() {
     return true;
 }
 
+function findStockIndex(fromMsgId, toMsgId) {
+    return stockedChunks.findIndex(entry => entry.fromMsgId === Number(fromMsgId) && entry.toMsgId === Number(toMsgId));
+}
+
+export async function deleteStockedChunk(fromMsgId, toMsgId) {
+    const index = findStockIndex(fromMsgId, toMsgId);
+    if (index < 0) return false;
+    stockedChunks.splice(index, 1);
+    await saveStock();
+    return true;
+}
+
+export async function regenerateStockedChunk(fromMsgId, toMsgId, { verbose = true } = {}) {
+    if (verbose) commandArgs = {};
+    if (stockInProgress) { if (verbose) infoToast('Stocking is already running.'); return false; }
+    if (endChapterInProgress) { if (verbose) warningToast('A rolling summary is being generated. Try again later.'); return false; }
+    const entry = stockedChunks[findStockIndex(fromMsgId, toMsgId)];
+    if (!entry) { if (verbose) errorToast('Stocked chunk not found.'); return false; }
+    const context = getContext();
+    const chatId = context.chatId;
+    stockInProgress = true;
+    commandArgs = { quiet: !verbose, profile: settings.stock_profile || undefined };
+    try {
+        (await import('./settings.js')).renderStockStatus?.();
+        infoToast(`Regenerating stocked chunk (messages ${entry.fromMsgId}-${entry.toMsgId})...`);
+        worldInfoCache = null;
+        // Merged chunks cover messages hidden by "hide after accept", so include hidden ones there.
+        const merged = entry.toMsgId <= (rollingSummary?.endMsgId ?? -1);
+        const history = await processRange(entry.fromMsgId, entry.toMsgId, { includeHidden: merged });
+        if (!history.length) { errorToast('No content found for this chunk.'); return false; }
+        const text = history.map(message => `${message.name ? `${message.name}: ` : ''}${message.mes || ''}`).join('\n\n');
+        const summary = await generateFromText(text, 0, false);
+        if (!summary) { errorToast('The model returned an empty chunk summary.'); return false; }
+        if (getContext().chatId !== chatId) return false;
+        const liveIndex = findStockIndex(entry.fromMsgId, entry.toMsgId);
+        if (liveIndex < 0) { errorToast('The stock changed during regeneration. The new summary was discarded.'); return false; }
+        stockedChunks[liveIndex] = { ...stockedChunks[liveIndex], summary, createdAt: new Date().toISOString() };
+        await saveStock();
+        doneToast(`Stocked chunk regenerated (messages ${entry.fromMsgId}-${entry.toMsgId}).`);
+        return true;
+    } catch (error) { debug('Stock chunk regeneration failed:', error); errorToast(`Regeneration failed: ${error?.message || error}`); return false; }
+    finally {
+        stockInProgress = false;
+        try { (await import('./settings.js')).renderStockStatus?.(); } catch { /* ignore */ }
+    }
+}
+
+export async function restockChunks() {
+    if (stockInProgress) { infoToast('Stocking is already running.'); return false; }
+    if (endChapterInProgress) { warningToast('A rolling summary is being generated. Try again later.'); return false; }
+    const activeEnd = rollingSummary?.endMsgId ?? -1;
+    const before = stockedChunks.length;
+    stockedChunks = stockedChunks.filter(entry => entry.toMsgId <= activeEnd);
+    if (stockedChunks.length !== before) await saveStock();
+    return autoStockChunks({ force: true, verbose: true });
+}
+
 export async function autoStockChunks({ force = false, verbose = false } = {}) {
     if (verbose) commandArgs = {};
     if (stockInProgress) { if (verbose) infoToast('Stocking is already running.'); return false; }
@@ -389,19 +447,19 @@ export async function autoStockChunks({ force = false, verbose = false } = {}) {
     }
 }
 
-async function buildStockSegments(oldEnd, target) {
+async function buildStockSegments(oldEnd, target, processOptions = {}) {
     const segments = [];
     let cursor = oldEnd + 1;
     let usedStock = 0;
     for (const entry of stockedChunks) {
         if (entry.toMsgId < cursor || entry.fromMsgId < cursor) continue;
         if (entry.toMsgId > target) break;
-        if (entry.fromMsgId > cursor) segments.push({ history: await processRange(cursor, entry.fromMsgId - 1) });
+        if (entry.fromMsgId > cursor) segments.push({ history: await processRange(cursor, entry.fromMsgId - 1, processOptions) });
         segments.push({ stock: entry.summary });
         usedStock++;
         cursor = entry.toMsgId + 1;
     }
-    if (cursor <= target) segments.push({ history: await processRange(cursor, target) });
+    if (cursor <= target) segments.push({ history: await processRange(cursor, target, processOptions) });
     return { segments, usedStock };
 }
 
@@ -617,7 +675,10 @@ export async function generateActiveSummaryReplacement(options = {}) {
     const start = base ? base.endMsgId + 1 : 0;
     const signature = summarySignature(active);
     regenerationBases.set(active.endMsgId, { signature, start, previousSummary: base?.summary || '' });
-    const result = await summarizeHistory([{ history: await processRange(start, active.endMsgId, { includeHidden: true }) }], active.endMsgId, { previousSummary: base?.summary || '', checkpointType: `regeneration:${signature}`, persistCheckpoint: false, addChunkComment: false });
+    const { segments } = options.useStock === false
+        ? { segments: [{ history: await processRange(start, active.endMsgId, { includeHidden: true }) }] }
+        : await buildStockSegments(start - 1, active.endMsgId, { includeHidden: true });
+    const result = await summarizeHistory(segments, active.endMsgId, { previousSummary: base?.summary || '', checkpointType: `regeneration:${signature}`, persistCheckpoint: false, addChunkComment: false });
     if (result && summarySignature(rollingSummary) !== signature) {
         errorToast('The active summary changed during regeneration. Generate it again.');
         return '';
@@ -688,10 +749,7 @@ export async function acceptRollingSummary(text, endMsgId, archiveOld = true) {
         }
     }
     await clearCheckpoint(target);
-    if (stockedChunks.length) {
-        stockedChunks = stockedChunks.filter(entry => entry.fromMsgId > target);
-        await saveStock();
-    }
+    // Stocked chunks are kept after a merge so a later regeneration can reuse them.
     const chunkComment = pendingChunkComments.get(target);
     if (chunkComment) {
         try { await context.executeSlashCommandsWithOptions(`/comment at=${target + 1} <details class="rmr-summary-chunks"><summary>Chunk Summaries</summary>${chunkComment}</details>`); }

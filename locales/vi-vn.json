@@ -114,5 +114,14 @@
   "rmr_stock_from": "bắt đầu từ tin",
   "rmr_stock_tokens": "Dung lượng tóm tắt đã stock",
   "rmr_of_context": "context",
-  "rmr_stock_context_limit": "Ngân sách token cho thanh đo bên dưới (0 = context của model), ví dụ 100000"
+  "rmr_stock_context_limit": "Ngân sách token cho thanh đo bên dưới (0 = context của model), ví dụ 100000",
+  "rmr_view_stock": "Xem kho",
+  "rmr_restock": "Stock lại",
+  "rmr_restock_confirm": "Bỏ các chunk chưa merge và stock lại từ sau bản tóm tắt active?",
+  "rmr_stock_all_merged": "tất cả đã merge vào bản tóm tắt active",
+  "rmr_stock_viewer_title": "Kho chunk summary đã stock",
+  "rmr_stock_empty": "Chưa có chunk nào được stock.",
+  "rmr_stock_merged": "đã merge",
+  "rmr_stock_pending": "chờ merge",
+  "rmr_delete_stock_confirm": "Xóa chunk summary đã stock này?"
 }

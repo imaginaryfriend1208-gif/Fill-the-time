@@ -114,5 +114,14 @@
   "rmr_stock_from": "à partir du message",
   "rmr_stock_tokens": "Taille des résumés stockés",
   "rmr_of_context": "du contexte",
-  "rmr_stock_context_limit": "Budget de jetons pour la jauge ci-dessous (0 = contexte du modèle), p. ex. 100000"
+  "rmr_stock_context_limit": "Budget de jetons pour la jauge ci-dessous (0 = contexte du modèle), p. ex. 100000",
+  "rmr_view_stock": "Voir le stock",
+  "rmr_restock": "Restocker",
+  "rmr_restock_confirm": "Abandonner les segments non fusionnés et restocker depuis le résumé actif ?",
+  "rmr_stock_all_merged": "tout est déjà fusionné dans le résumé actif",
+  "rmr_stock_viewer_title": "Résumés de segments stockés",
+  "rmr_stock_empty": "Aucun segment stocké pour le moment.",
+  "rmr_stock_merged": "fusionné",
+  "rmr_stock_pending": "en attente",
+  "rmr_delete_stock_confirm": "Supprimer ce résumé de segment stocké ?"
 }
