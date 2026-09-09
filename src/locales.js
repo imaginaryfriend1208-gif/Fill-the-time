@@ -47,6 +47,18 @@ function applyTranslatedNode(element) {
     }
     element.textContent = text;
 }
+function applyTranslatedTip(element) {
+    const tipKey = element.getAttribute('data-i18n-tip');
+    if (!tipKey) return;
+    if (!element.dataset.rmrTipEnglish) element.dataset.rmrTipEnglish = element.getAttribute('data-tip') || '';
+    element.setAttribute('data-tip', translations?.[tipKey] || element.dataset.rmrTipEnglish);
+}
+function applyTranslatedTitle(element) {
+    const titleKey = element.getAttribute('data-i18n-title');
+    if (!titleKey) return;
+    if (!element.dataset.rmrTitleEnglish) element.dataset.rmrTitleEnglish = element.getAttribute('title') || '';
+    element.setAttribute('title', translations?.[titleKey] || element.dataset.rmrTitleEnglish);
+}
 
 export function getAvailableLocales() { return AVAILABLE_LOCALES.map(item => ({ ...item })); }
 export function getLocaleOverride() { return localeOverride; }
@@ -76,4 +88,8 @@ export function applyExtensionLocale(container) {
     if (!element) return;
     if (element.matches?.('[data-i18n]')) applyTranslatedNode(element);
     element.querySelectorAll('[data-i18n]').forEach(applyTranslatedNode);
+    if (element.matches?.('[data-i18n-tip]')) applyTranslatedTip(element);
+    element.querySelectorAll('[data-i18n-tip]').forEach(applyTranslatedTip);
+    if (element.matches?.('[data-i18n-title]')) applyTranslatedTitle(element);
+    element.querySelectorAll('[data-i18n-title]').forEach(applyTranslatedTitle);
 }

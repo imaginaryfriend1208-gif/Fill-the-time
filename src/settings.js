@@ -147,9 +147,30 @@ async function changeLocale(value) {
     await renderArchiveList();
     refreshTutorialLocale();
 }
+function initInfoTooltips() {
+    let tip = document.getElementById('rmr_info_tooltip');
+    if (!tip) {
+        tip = document.createElement('div');
+        tip.id = 'rmr_info_tooltip';
+        tip.className = 'rmr-info-tooltip';
+        document.body.appendChild(tip);
+    }
+    const hide = () => tip.classList.remove('rmr-info-show');
+    $('#rmr_settings_root').off('.fttTip')
+        .on('mouseenter.fttTip focusin.fttTip', '.rmr-info-icon', function () {
+            const text = this.getAttribute('data-tip');
+            if (!text) return;
+            tip.textContent = text;
+            tip.classList.add('rmr-info-show');
+        })
+        .on('mouseleave.fttTip focusout.fttTip', '.rmr-info-icon', hide);
+    $(document).off('keydown.fttTip').on('keydown.fttTip', e => { if (e.key === 'Escape') hide(); });
+}
 async function loadUI() {
     if (!$('#rmr_settings_root').length) $('#extensions_settings').append(await $.get(getExtensionAssetPath('templates/settings_panel.html')));
+    if (!$('#rmr_summary_popup').length) $('body').append('<div id="rmr_summary_popup" class="rmr-summary-popup-overlay" style="display:none"><div class="rmr-summary-popup"><div class="rmr-summary-popup-header"><span id="rmr_popup_title" class="rmr-summary-popup-title">Rolling Summary</span><span id="rmr_popup_range" class="rmr-summary-popup-range"></span><button type="button" id="rmr_popup_close" class="rmr-summary-popup-close"><i class="fa-solid fa-xmark"></i></button></div><div class="rmr-summary-popup-body"><textarea id="rmr_popup_textarea" class="rmr-summary-popup-textarea text_pole" placeholder="Summary..."></textarea></div><div class="rmr-summary-popup-footer"><label id="rmr_popup_archive_wrap" class="checkbox_label"><input id="rmr_popup_archive_old" class="checkbox" type="checkbox"> <span data-i18n="rmr_archive_previous">Archive previous summary</span></label><div class="rmr-summary-popup-spacer"></div><button type="button" class="menu_button" id="rmr_popup_resummarize" data-i18n="rmr_resummarize">Re-summarize</button><button type="button" class="menu_button" id="rmr_popup_cancel" data-i18n="rmr_cancel">Cancel</button><button type="button" class="menu_button" id="rmr_popup_save" data-i18n="rmr_accept">Accept</button></div></div></div>');
     applyExtensionLocale($('#rmr_settings_root'));
+    initInfoTooltips();
     await loadVersionBadge();
     const localeSelect = $('#rmr_language_select').empty();
     for (const locale of getAvailableLocales()) localeSelect.append($('<option>').val(locale.code).text(locale.name));

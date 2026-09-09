@@ -123,5 +123,15 @@
   "rmr_stock_empty": "Aucun segment stocké pour le moment.",
   "rmr_stock_merged": "fusionné",
   "rmr_stock_pending": "en attente",
-  "rmr_delete_stock_confirm": "Supprimer ce résumé de segment stocké ?"
+  "rmr_delete_stock_confirm": "Supprimer ce résumé de segment stocké ?",
+  "rmr_info_general": "Exportez/Importez les paramètres de l'extension en JSON. Le Tutoriel vous guide à travers chaque fonctionnalité étape par étape.",
+  "rmr_info_message_button": "Ajoute un bouton ⏹ à chaque message. Cliquez pour définir l'ID du message de fin et déclencher la résumé du dernier résumé jusqu'à ce message.",
+  "rmr_info_rolling_summary": "Fonctionnalité principale. Cliquez sur 'Créer un chapitre' pour résumer les messages de la fin du résumé actif jusqu'à l'ID de fin. Avec Stages > 1, la plage est divisée par tokens et chaque étape fusionne automatiquement avant le popup de révision finale.\nDéclenchement : cliquez sur ⏹ sur un message, ou entrez un ID de fin et cliquez sur Créer un chapitre.",
+  "rmr_info_chunk_stock": "Résume les segments de messages en arrière-plan pour que Créer un chapitre les réutilise au lieu de relire les messages bruts. Le stockage automatique s'exécute après chaque génération.\nStock maintenant : force le stockage de tous les nouveaux messages.\nRestock : abandonne les segments non fusionnés et re-stocke depuis le résumé actif.\nBudget de tokens : limite ce que la barre affiche (0 = contexte du modèle).",
+  "rmr_info_archive": "Chaque chat garde son propre archive. Lorsque vous acceptez une mise à jour de résumé, la version précédente peut être archivée ici. Vous pouvez restaurer toute version archivée comme résumé actif.",
+  "rmr_info_connection": "Remplace le profil API utilisé pour la résumé (séparé du profil de chat). Le profil de Stock est utilisé pour le stockage de segments en arrière-plan. La limite de débit throttle les requêtes API (0 = illimité).",
+  "rmr_info_preset": "Sauvegardez, mettez à jour, supprimez, exportez ou importez des presets de prompt. Un preset stocke les prompts Système + Utilisateur utilisés pour la résumé. Modifiez les prompts ci-dessous, puis sauvegardez.",
+  "rmr_info_prompts": "Le Prompt Fusion combine le résumé précédent avec les nouveaux événements en le chapitre final. Le Prompt Segment résume chaque segment avant la fusion (utilisé quand 'Utiliser des prompts de segment séparés' est activé). Macros : {{previousSummary}}, {{content}}, {{worldInfo}}, macros de fiche.",
+  "rmr_info_behavior": "Masquer les messages : marque les messages résumés comme masqués du modèle.\nArchiver à l'acceptation : archive automatiquement le résumé précédent.\nCommentaires de segment : publie les résumés de segment comme commentaires.\nUtiliser directement les segments : saute la fusion et concatène les digestions de segments.",
+  "rmr_info_inject": "Injecte automatiquement le résumé dans le prompt à une profondeur choisie. Normalement, utilisez {{fillthetime}} dans le Gestionnaire de Prompts. Activez uniquement si vous préférez l'injection automatique.\nMacros : {{fillthetime}}, {{lastMessageId}}, {{firstIncludedMessageId}}."
 }

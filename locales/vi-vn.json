@@ -123,5 +123,15 @@
   "rmr_stock_empty": "Chưa có chunk nào được stock.",
   "rmr_stock_merged": "đã merge",
   "rmr_stock_pending": "chờ merge",
-  "rmr_delete_stock_confirm": "Xóa chunk summary đã stock này?"
+  "rmr_delete_stock_confirm": "Xóa chunk summary đã stock này?",
+  "rmr_info_general": "Xuất/Nhập toàn bộ cấu hình extension dạng JSON. Bấm 'Bắt đầu hướng dẫn' để được hướng dẫn từng bước qua mọi tính năng.",
+  "rmr_info_message_button": "Thêm nút ⏹ vào mỗi tin nhắn. Bấm để đặt End Message ID và bắt đầu tóm tắt từ bản active đến tin nhắn đó.",
+  "rmr_info_rolling_summary": "Tính năng chính. Bấm 'Tạo Chapter' để tóm tắt các tin nhắn từ cuối bản active đến End ID. Với Stages > 1, khoảng tin nhắn được chia theo token và mỗi giai đoạn tự merge trước khi hiện popup duyệt cuối.\nKích hoạt: bấm ⏹ trên tin nhắn, hoặc nhập End ID rồi bấm Tạo Chapter.",
+  "rmr_info_chunk_stock": "Tóm tắt sẵn từng phần tin nhắn chạy ngầm để Tái Chapter dùng lại thay vì đọc lại toàn bộ. Tự stock sau mỗi lần tạo tin nhắn.\nStock ngay: buộc stock tất cả tin nhắn mới.\nStock lại: bỏ các chunk chưa merge và stock lại từ bản active.\nNgân sách token: giới hạn thanh đo (0 = context của model).",
+  "rmr_info_archive": "Mỗi chat có kho lưu trữ riêng. Khi chấp nhận bản tóm tắt mới, bản trước có thể được lưu vào đây. Bạn có thể khôi phục bất kỳ bản lưu trữ nào làm bản active.",
+  "rmr_info_connection": "Ghi đè hồ sơ API dùng cho tóm tắt (tách riêng với hồ sơ chat). Profile cho Stock dùng khi chạy ngầm. Giới hạn request chặn spam API (0 = không giới hạn).",
+  "rmr_info_preset": "Lưu, cập nhật, xóa, xuất hoặc nhập preset prompt. Một preset lưu System Prompt + User Prompt dùng cho tóm tắt. Chỉnh prompt bên dưới rồi bấm Lưu mới.",
+  "rmr_info_prompts": "Prompt Merge gộp bản tóm tắt trước với sự kiện mới thành chapter cuối. Prompt Chunk nén từng phần trước khi merge (dùng khi bật 'Dùng prompt chunk riêng'). Macro: {{previousSummary}}, {{content}}, {{worldInfo}}, macro thẻ nhân vật.",
+  "rmr_info_behavior": "Ẩn tin nhắn: đánh dấu tin nhắn đã tóm tắt là ẩn khỏi model.\nLưu trữ khi chấp nhận: tự lưu bản trước khi chấp nhận.\nBình luận chunk: thêm tóm tắt từng phần dưới dạng bình luận chat.\nDùng trực tiếp chunk: bỏ bước merge, ghép chunk digest thành bản cuối.",
+  "rmr_info_inject": "Tự động chèn bản tóm tắt vào prompt ở độ sâu đã chọn. Thông thường dùng {{fillthetime}} trong Prompt Manager. Chỉ bật nếu muốn chèn tự động.\nMacro: {{fillthetime}}, {{lastMessageId}}, {{firstIncludedMessageId}}."
 }
