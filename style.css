@@ -66,7 +66,8 @@
 .rmr-summary-expand { background:none; border:0; color:var(--SmartThemeBodyColor); cursor:pointer; }
 .rmr-archive-item summary { cursor:pointer; color:var(--SmartThemeEmColor); }
 .rmr-archive-item pre { white-space:pre-wrap; overflow-wrap:anywhere; font-family:inherit; }
-.rmr-summary-popup-overlay,.rmr-choice-overlay { position:fixed; inset:0; background:rgba(0,0,0,.7); display:flex; align-items:center; justify-content:center; z-index:10000; }
+/* Explicit viewport size: some themes put a transform on <html>, which makes it the containing block for position:fixed; inset:0 then collapses to height 0. */
+.rmr-summary-popup-overlay,.rmr-choice-overlay { position:fixed; top:0; left:0; width:100vw; height:100vh; height:100dvh; background:rgba(0,0,0,.7); display:flex; align-items:center; justify-content:center; z-index:10000; }
 .rmr-summary-popup,.rmr-choice-dialog { width:min(850px,90vw); max-height:85vh; display:flex; flex-direction:column; padding:14px; border:1px solid var(--SmartThemeBorderColor); border-radius:10px; background:var(--SmartThemeBlurTintColor); box-shadow:0 5px 30px #0008; }
 .rmr-choice-dialog { width:min(520px,90vw); }
 .rmr-summary-popup-header,.rmr-summary-popup-footer { display:flex; align-items:center; gap:10px; padding:8px; }
