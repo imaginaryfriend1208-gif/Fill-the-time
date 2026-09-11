@@ -1,6 +1,8 @@
-# Fill the Time
+# IF Memory
 
 A SillyTavern extension that maintains one cumulative story summary for each chat. New chapters merge into the active summary, while previous versions can be kept in a per-chat archive.
+
+> **Credits & Acknowledgements:** Developed by **Imaginary-Friend**. Inspired by the concept of *Timeline Memory* by **Karelian**, re-architected with heavily modified features, rolling-summary workflows, persistent archiving, checkpointing, and context cleanup utilities.
 
 ## Requirements
 
@@ -32,11 +34,11 @@ git clone https://github.com/imaginaryfriend1208-gif/Fill-the-time.git fill-the-
 
 Reload SillyTavern. To update a manual installation, run `git pull` inside the `fill-the-time` directory and reload.
 
-The installed extension version appears beside **Fill the Time** in its settings header and is read directly from `manifest.json`.
+The installed extension version appears beside **IF Memory** in its settings header and is read directly from `manifest.json`.
 
 ## Quick start
 
-1. Open **Extensions → Fill the Time**.
+1. Open **Extensions → IF Memory**.
 2. Select a Connection Manager profile under **Summarization Connection**, or leave **No Override** to use the current connection.
 3. Keep the built-in **Rolling Summary** preset or configure your own prompts.
 4. Hover a chat message and click **⏹**, or enter an End Message ID and click **Create Chapter**.
@@ -54,7 +56,7 @@ The extension UI supports:
 - Tiếng Việt
 - Français
 
-The selector changes only Fill the Time. It does not change SillyTavern's global language. The choice persists in extension settings.
+The selector changes only IF Memory. It does not change SillyTavern's global language. The choice persists in extension settings.
 
 ## Rolling summaries and chapters
 
@@ -83,7 +85,7 @@ Regeneration does not alter archive entries, the active endpoint, chapter marker
 
 ## Prompt presets
 
-Fill the Time includes Rolling Summary and diary-oriented presets. A preset stores:
+IF Memory includes Rolling Summary and diary-oriented presets. A preset stores:
 
 - System Prompt
 - User Prompt
@@ -154,7 +156,7 @@ The summarization User Prompt separately supports `{{previousSummary}}` and `{{c
 
 ## Data safety
 
-Summary data and archives are stored in the current chat metadata. Settings and presets are stored in SillyTavern extension settings. Fill the Time creates a chat backup before chapter updates and before accepting active-summary regeneration. Proposal popups do not replace persisted data until explicitly accepted.
+Summary data and archives are stored in the current chat metadata. Settings and presets are stored in SillyTavern extension settings. IF Memory creates a chat backup before chapter updates and before accepting active-summary regeneration. Proposal popups do not replace persisted data until explicitly accepted.
 
 ## License
 

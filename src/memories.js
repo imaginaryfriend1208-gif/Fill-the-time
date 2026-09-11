@@ -4,7 +4,7 @@ import { getRegexedString, regex_placement } from '../../../regex/engine.js';
 import { settings } from './settings.js';
 import { debug } from './logging.js';
 import { ConnectionManagerRequestService } from '../../../shared.js';
-import { amount_gen, main_api, setExtensionPrompt, extension_prompt_types, extension_prompt_roles } from '../../../../../script.js';
+import { amount_gen, main_api, setExtensionPrompt, extension_prompt_types, extension_prompt_roles, eventSource, event_types } from '../../../../../script.js';
 import { oai_settings, openai_settings, chat_completion_sources, reasoning_effort_types } from '../../../../../scripts/openai.js';
 import { getPresetManager } from '../../../../../scripts/preset-manager.js';
 import { createChatBackup } from './backup.js';
@@ -12,6 +12,7 @@ import { createChatBackup } from './backup.js';
 const CHAT_APIS = ['claude', 'openrouter', 'windowai', 'scale', 'ai21', 'makersuite', 'vertexai', 'mistralai', 'custom', 'google', 'cohere', 'perplexity', 'groq', '01ai', 'nanogpt', 'deepseek', 'aimlapi', 'xai', 'pollinations', 'moonshot', 'zai'];
 const INJECT_KEY = 'FILLTHETIME_MEMORY_INJECT';
 const PENDING_KEY = 'fillTheTimePendingChapter';
+const PENDING_SILENT_KEY = 'fillTheTimePendingSilentMerge';
 const STOCK_KEY = 'fillTheTimeStock';
 let rollingSummary = null;
 let archiveEntries = [];
@@ -33,10 +34,10 @@ async function setProgress(state) {
     } catch (error) { debug('Could not update chapter progress UI:', error); }
 }
 
-const infoToast = text => { if (!commandArgs?.quiet) toastr.info(text, 'Fill the Time'); };
-const doneToast = text => { if (!commandArgs?.quiet) toastr.success(text, 'Fill the Time'); };
-const warningToast = text => { if (!commandArgs?.quiet) toastr.warning(text, 'Fill the Time'); };
-const errorToast = text => { if (!commandArgs?.quiet) toastr.error(text, 'Fill the Time'); };
+const infoToast = text => { if (!commandArgs?.quiet) toastr.info(text, 'IF Memory'); };
+const doneToast = text => { if (!commandArgs?.quiet) toastr.success(text, 'IF Memory'); };
+const warningToast = text => { if (!commandArgs?.quiet) toastr.warning(text, 'IF Memory'); };
+const errorToast = text => { if (!commandArgs?.quiet) toastr.error(text, 'IF Memory'); };
 const clone = value => value == null ? value : JSON.parse(JSON.stringify(value));
 
 function normalizeSummary(value) {
@@ -216,7 +217,7 @@ export async function clearRollingSummary() {
 }
 
 export function initFillTheTimeMacros() {
-    MacrosParser.registerMacro('fillthetime', () => isInternalGeneration ? '' : (rollingSummary?.summary || ''), 'Active cumulative Fill the Time summary');
+    MacrosParser.registerMacro('fillthetime', () => isInternalGeneration ? '' : (rollingSummary?.summary || ''), 'Active cumulative IF Memory summary');
     MacrosParser.registerMacro('lastMessageId', () => Math.max(0, (getContext().chat || []).length - 1), 'Most recent message ID');
     MacrosParser.registerMacro('firstIncludedMessageId', () => rollingSummary ? rollingSummary.endMsgId + 1 : 0, 'First message after the active summary');
 }
@@ -298,6 +299,7 @@ async function sendRequest(profileId, messages, maxTokens, overridePayload) {
         try { return await ConnectionManagerRequestService.sendRequest(profileId, messages, maxTokens, { includePreset: true, includeInstruct: true, stream: false }, overridePayload); }
         catch (error) { debug('Profile request failed; falling back:', error); }
     }
+    if (commandArgs?.background) throw new Error('Background merge requires a dedicated Connection Manager profile (Summarization Connection). Configure one in IF Memory settings.');
     const { generateQuietPrompt } = await import('../../../../../script.js');
     return { content: await generateQuietPrompt({ quietPrompt: messages.map(item => item.content).join('\n\n') }) };
 }
@@ -858,6 +860,10 @@ export async function discardPendingCheckpoint() {
 }
 
 export async function endChapter(messageOrId, options = {}) {
+    if (options.autoAccept ?? settings.auto_accept_end) {
+        if (endChapterSilentActive) { warningToast('A background merge is already running.'); return false; }
+        return endChapterSilent(messageOrId, options);
+    }
     if (endChapterInProgress) {
         warningToast('A rolling summary is already being generated.');
         return false;
@@ -876,4 +882,101 @@ export async function endChapter(messageOrId, options = {}) {
     } finally {
         endChapterInProgress = false;
     }
+}
+
+
+// ===== Silent background merge (non-blocking) =====
+let endChapterSilentActive = false;
+export function isSilentMergeRunning() { return endChapterSilentActive; }
+
+export async function endChapterSilent(messageOrId, options = {}) {
+    if (endChapterSilentActive) { warningToast('A background merge is already running.'); return false; }
+    const context = getContext();
+    const chatId = context.chatId;
+    const target = typeof messageOrId === 'number' ? messageOrId : Number(messageOrId?.attr?.('mesid'));
+    const chat = context.chat || [];
+    if (!Number.isInteger(target) || target < 0 || target >= chat.length) { errorToast(`Message ID must be between 0 and ${Math.max(0, chat.length - 1)}.`); return false; }
+    const oldEnd = rollingSummary?.endMsgId ?? -1;
+    if (target <= oldEnd) { errorToast(`Choose a message after ${oldEnd}; earlier content is already summarized.`); return false; }
+    if (!resolveConnectionProfileId(options.profile, settings.profile)) { errorToast('Background merge requires a Connection Manager profile. Set one under "Summarization Connection" in IF Memory settings.'); return false; }
+
+    endChapterSilentActive = true;
+    // Flag in metadata: if the tab dies mid-merge, the next chat open detects the interrupted run.
+    context.chatMetadata[PENDING_SILENT_KEY] = { targetMsgId: target, startedAt: new Date().toISOString() };
+    await context.saveMetadata();
+    infoToast(`Merging silently in the background (through message ${target})...`);
+
+    let chatChanged = false;
+    const onChatChanged = () => { chatChanged = true; };
+    eventSource.on(event_types.CHAT_CHANGED, onChatChanged);
+    commandArgs = { ...options, background: true };
+    try {
+        await createChatBackup('silent rolling summary update');
+        const proposal = await generateRollingSummary(target, options);
+        if (chatChanged || getContext().chatId !== chatId) {
+            debug('Silent merge aborted: the chat changed mid-generation.');
+            warningToast('Background merge aborted: the chat was switched. Nothing was written.');
+            return false;
+        }
+        if (!proposal) { warningToast('Background merge failed. Nothing was written.'); return false; }
+        const accepted = await acceptRollingSummary(proposal, target, options.archiveOld ?? settings.archive_on_accept ?? true);
+        if (!accepted) { errorToast('Background merge could not be applied. Nothing was written.'); return false; }
+        doneToast(`Background merge complete (through message ${target}).`);
+        showMergeDonePopup(proposal, target);
+        return true;
+    } catch (error) {
+        debug('Silent merge failed:', error);
+        errorToast(`Background merge failed: ${error?.message || error}`);
+        return false;
+    } finally {
+        eventSource.off(event_types.CHAT_CHANGED, onChatChanged);
+        commandArgs = {};
+        endChapterSilentActive = false;
+        const live = getContext();
+        if (live.chatMetadata && live.chatId === chatId) delete live.chatMetadata[PENDING_SILENT_KEY];
+        try { await live.saveMetadata(); } catch { /* ignore */ }
+    }
+}
+
+// Detect an interrupted background merge (tab closed / reload) on the next chat open.
+export async function checkStaleSilentMerge() {
+    if (endChapterSilentActive) return;
+    const context = getContext();
+    const pending = context.chatMetadata?.[PENDING_SILENT_KEY];
+    if (!pending) return;
+    debug('Stale silent-merge flag found:', pending);
+    warningToast('A previous background merge was interrupted (tab closed or reloaded). Nothing was written for it.');
+    delete context.chatMetadata[PENDING_SILENT_KEY];
+    await context.saveMetadata();
+}
+
+// Read-back popup after a silent merge: data is already committed, purely informational.
+function showMergeDonePopup(text, endMsgId) {
+    const summary = String(text || '');
+    const wrap = document.createElement('div');
+    wrap.id = 'rmr_merge_done_popup';
+    wrap.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5);';
+    wrap.innerHTML = `
+        <div style="background:var(--SmartThemeBlurTintColor,#1b1b2f);color:var(--SmartThemeBodyColor,#fff);border:1px solid var(--SmartThemeQuoteColor,#666);border-radius:10px;width:min(720px,92vw);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 6px 24px rgba(0,0,0,.45);">
+            <div style="padding:12px 16px;font-weight:700;border-bottom:1px solid rgba(128,128,128,.35);display:flex;justify-content:space-between;align-items:center;">
+                <span>✅ Merge complete — read back the summary (through message ${endMsgId})</span>
+                <span data-act="x" style="cursor:pointer;font-weight:400;">✕</span>
+            </div>
+            <textarea class="rmr-body" readonly style="flex:1;min-height:300px;resize:vertical;padding:12px 16px;background:transparent;color:inherit;border:none;outline:none;font-size:14px;"></textarea>
+            <div style="padding:10px 16px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid rgba(128,128,128,.35);">
+                <button data-act="copy" class="menu_button">Copy</button>
+                <button data-act="close" class="menu_button">Close</button>
+            </div>
+        </div>`;
+    const body = wrap.querySelector('.rmr-body');
+    body.value = summary;
+    const close = () => { wrap.remove(); };
+    wrap.querySelector('[data-act=x]').onclick = close;
+    wrap.querySelector('[data-act=close]').onclick = close;
+    wrap.querySelector('[data-act="copy"]').onclick = async () => {
+        try { await navigator.clipboard.writeText(body.value); toastr.success('Summary copied.', 'IF Memory'); }
+        catch { toastr.error('Copy failed.', 'IF Memory'); }
+    };
+    wrap.addEventListener('mousedown', (event) => { if (event.target === wrap) close(); });
+    document.body.appendChild(wrap);
 }

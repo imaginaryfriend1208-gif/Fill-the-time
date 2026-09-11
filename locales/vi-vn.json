@@ -1,5 +1,5 @@
 {
-  "rmr_extension_name": "Fill the Time",
+  "rmr_extension_name": "IF Memory",
   "rmr_language": "Ngôn ngữ",
   "rmr_help": "Hướng dẫn",
   "rmr_general": "Chung",
@@ -72,7 +72,7 @@
   "rmr_finish": "Hoàn tất",
   "rmr_close": "Đóng",
   "tutorial_welcome_title": "Một bản tóm tắt lớn lên cùng câu chuyện",
-  "tutorial_welcome_body": "Fill the Time duy trì một bản tóm tắt tích lũy cho mỗi chat. Mỗi cập nhật được chấp nhận sẽ thay thế bản active; bản trước có thể được lưu trữ.",
+  "tutorial_welcome_body": "IF Memory duy trì một bản tóm tắt tích lũy cho mỗi chat. Mỗi cập nhật được chấp nhận sẽ thay thế bản active; bản trước có thể được lưu trữ.",
   "tutorial_profile_title": "Chọn hồ sơ tóm tắt",
   "tutorial_profile_body": "Chọn hồ sơ Connection Manager. Nên dùng model đủ mạnh để giữ sự kiện cũ khi gộp sự kiện mới.",
   "tutorial_preset_title": "Tạo preset dùng lại",

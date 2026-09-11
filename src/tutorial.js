@@ -3,7 +3,7 @@ import { loadTutorialTranslations, getTutorialText } from './locales.js';
 const VERSION = 5;
 const STORAGE_KEY = 'fill-the-time-tutorial-completed';
 const steps = [
-    { key: 'welcome', title: 'One summary that grows with your story', body: 'Fill the Time maintains one rolling cumulative summary per chat. Each accepted update replaces the active summary; the previous version can be archived.' },
+    { key: 'welcome', title: 'One summary that grows with your story', body: 'IF Memory maintains one rolling cumulative summary per chat. Each accepted update replaces the active summary; the previous version can be archived.' },
     { key: 'profile', title: 'Choose a summarization profile', body: 'Select a Connection Manager profile. Use a capable model because it must preserve old facts while merging new events.', selector: '#rmr_profile' },
     { key: 'preset', title: 'Create reusable prompt presets', body: 'Edit the System and User prompts, keep {{previousSummary}} and {{content}}, then select Save New. Update overwrites the selected preset; Export and Import share it as JSON.', selector: '#rmr_summarize_preset' },
     { key: 'button', title: 'End a section with ⏹', body: 'Hover a message and click ⏹. The extension summarizes only messages after the active summary while supplying the prior summary to the model.', selector: '#rmr_chapter_button' },

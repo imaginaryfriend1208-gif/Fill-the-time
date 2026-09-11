@@ -1,5 +1,5 @@
 {
-  "rmr_extension_name": "Fill the Time",
+  "rmr_extension_name": "IF Memory",
   "rmr_language": "Langue",
   "rmr_help": "Aide",
   "rmr_general": "Général",
@@ -72,7 +72,7 @@
   "rmr_finish": "Terminer",
   "rmr_close": "Fermer",
   "tutorial_welcome_title": "Un résumé qui grandit avec votre histoire",
-  "tutorial_welcome_body": "Fill the Time conserve un résumé cumulatif par discussion. Chaque mise à jour acceptée remplace le résumé actif; la version précédente peut être archivée.",
+  "tutorial_welcome_body": "IF Memory conserve un résumé cumulatif par discussion. Chaque mise à jour acceptée remplace le résumé actif; la version précédente peut être archivée.",
   "tutorial_profile_title": "Choisir un profil de résumé",
   "tutorial_profile_body": "Sélectionnez un profil Connection Manager. Utilisez un modèle capable de préserver les faits anciens tout en fusionnant les nouveaux événements.",
   "tutorial_preset_title": "Créer des préréglages réutilisables",

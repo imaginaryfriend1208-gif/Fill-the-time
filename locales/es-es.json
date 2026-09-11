@@ -1,7 +1,7 @@
 {
-  "rmr_extension_name": "Fill the Time",
+  "rmr_extension_name": "IF Memory",
   "tutorial_welcome_title": "Un resumen que crece con tu historia",
-  "tutorial_welcome_body": "Fill the Time mantiene un único resumen acumulativo por chat.",
+  "tutorial_welcome_body": "IF Memory mantiene un único resumen acumulativo por chat.",
   "tutorial_profile_title": "Elige un perfil de resumen",
   "tutorial_profile_body": "Selecciona un perfil de Connection Manager para generar resúmenes.",
   "tutorial_button_title": "Finaliza una sección con ⏹",

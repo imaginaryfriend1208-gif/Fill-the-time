@@ -1,7 +1,7 @@
 <div id="rmr_settings_root" class="rmr-extension-settings">
     <div class="inline-drawer">
         <div class="inline-drawer-toggle inline-drawer-header rmr-drawer-header">
-            <span class="rmr-title-group"><b data-i18n="rmr_extension_name">Fill the Time</b><span id="rmr_version_badge" class="rmr-version-badge" hidden></span></span>
+            <span class="rmr-title-group"><b data-i18n="rmr_extension_name">IF Memory</b><span id="rmr_version_badge" class="rmr-version-badge" hidden></span></span>
             <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
         </div>
         <div class="inline-drawer-content">
@@ -71,6 +71,7 @@ Token budget: limits how many tokens the meter shows (0 = model context)." data-
                         </div>
                     </div>
                     <label class="checkbox_label" for="rmr_auto_stock_chunks"><input id="rmr_auto_stock_chunks" class="checkbox" type="checkbox"><span data-i18n="rmr_auto_stock_chunks">Auto-stock chunk summaries in the background</span></label>
+                    <label class=\"checkbox_label\" for=\"rmr_auto_accept_end\"><input id=\"rmr_auto_accept_end\" class=\"checkbox\" type=\"checkbox\"><span data-i18n=\"rmr_auto_accept_end\">Silent background merge (auto-accept, read-back popup when done)</span></label>
                     <div class="rmr-chunk-size-row">
                         <label for="rmr_stock_context_limit"><small data-i18n="rmr_stock_context_limit">Token budget for the meter below (0 = model context), e.g. 100000</small></label>
                         <input class="text_pole widthNatural" id="rmr_stock_context_limit" type="number" min="0" step="1000" placeholder="auto">

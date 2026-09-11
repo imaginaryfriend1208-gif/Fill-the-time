@@ -1,11 +1,11 @@
 {
-    "display_name": "Fill the Time",
+    "display_name": "IF Memory",
     "loading_order": 9,
     "requires": [],
     "optional": [],
     "js": "index.js",
     "css": "style.css",
-    "author": "Karelian",
-    "version": "3.1.0",
+    "author": "Imaginary Friend",
+    "version": "3.2.0",
     "homePage": "https://github.com/imaginaryfriend1208-gif/Fill-the-time"
 }
