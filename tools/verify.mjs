@@ -132,8 +132,14 @@ check('stock-hygiene', 'checkpoint resume is guarded by a stock fingerprint',
     /stockKey/.test(memories));
 check('stock-hygiene', 'useStock can be turned off from the UI',
     /merge_use_stock/.test(settingsJs) && /rmr_merge_use_stock/.test(html));
-check('stock-hygiene', 'reused chunk ranges are reported',
-    /Reusing|reuse|Dùng lại/i.test(memories.match(/async function buildStockSegments[\s\S]{0,900}/)?.[0] || '') || /usedRanges/.test(memories));
+check('stock-hygiene', 'merge scope is announced as one span, not a list of chunk boundaries',
+    /function announceMergeScope/.test(memories)
+    && (memories.match(/announceMergeScope\(/g) || []).length >= 3
+    && !/usedRanges\.join/.test(memories),
+    'both generators must report from-to once; per-chunk range listing must not come back');
+check('stock-hygiene', 'merge scope is not announced twice',
+    !/Using \$\{stockCount\} stocked chunk/.test(memories),
+    'the old duplicate stock-count toast must stay removed');
 
 // -------------------------------------------------------------- ui-ids
 const markupIds = new Set();

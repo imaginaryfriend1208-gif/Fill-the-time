@@ -553,8 +553,24 @@ async function buildStockSegments(oldEnd, target, processOptions = {}) {
         cursor = entry.toMsgId + 1;
     }
     if (cursor <= target) segments.push({ history: await processRange(cursor, target, processOptions) });
-    if (usedRanges.length) infoToast(`Reusing ${usedRanges.length} stocked ${usedRanges.length === 1 ? 'chunk' : 'chunks'}: ${usedRanges.join(', ')}`);
     return { segments, usedStock, usedRanges };
+}
+
+/**
+ * Announce the whole span this merge covers, as one line, instead of listing every
+ * chunk boundary. `from`/`to` are the real message ids being folded in, so the toast
+ * doubles as a check that the merge starts where you expect it to.
+ */
+function announceMergeScope(from, to, segments, usedStock = 0) {
+    from = Number(from); to = Number(to);
+    if (!Number.isInteger(from) || !Number.isInteger(to) || to < from) return;
+    const freshMessages = (Array.isArray(segments) ? segments : [])
+        .reduce((sum, segment) => sum + (Array.isArray(segment?.history) ? segment.history.length : 0), 0);
+    const range = from === to ? `message ${from}` : `messages ${from}-${to}`;
+    const parts = [];
+    if (usedStock > 0) parts.push(`${usedStock} stocked ${usedStock === 1 ? 'chunk' : 'chunks'}`);
+    if (freshMessages > 0) parts.push(`${freshMessages} new ${freshMessages === 1 ? 'message' : 'messages'}`);
+    infoToast(`Merging ${range}${parts.length ? ` (${parts.join(' + ')})` : ''}...`);
 }
 
 function pendingCheckpoint() { const value = getContext().chatMetadata?.[PENDING_KEY]; return value && typeof value === 'object' ? value : null; }
@@ -701,7 +717,6 @@ async function summarizeHistory(segments, target, options = {}) {
     const needChunkPass = totalPieces > 1 && fresh.length > 0;
     let summaries = pending && pendingType === checkpointType && Number(pending.startMsgId) === start && Number(pending.targetMessageId) === target && Number(pending.chunkCount) === fresh.length && pending.stockKey === stockKey && Array.isArray(pending.chunkSummaries) ? [...pending.chunkSummaries] : [];
     if (summaries.length) infoToast(`Resuming from chunk ${summaries.length + 1}/${fresh.length}.`);
-    if (stockCount) infoToast(`Using ${stockCount} stocked chunk ${stockCount === 1 ? 'summary' : 'summaries'}.`);
     if (needChunkPass) {
         while (summaries.length < fresh.length) {
             const index = summaries.length;
@@ -760,7 +775,8 @@ export async function generateRollingSummary(messageId, options = {}) {
     const useStock = options.useStock ?? settings.merge_use_stock ?? true;
     const ignorePrevious = options.ignorePrevious ?? settings.merge_ignore_previous ?? false;
     if (ignorePrevious) infoToast('Fresh merge: the previous summary is not sent to the model.');
-    const { segments } = useStock === false ? { segments: [{ history: await processRange(oldEnd + 1, target) }] } : await buildStockSegments(oldEnd, target);
+    const { segments, usedStock = 0 } = useStock === false ? { segments: [{ history: await processRange(oldEnd + 1, target) }] } : await buildStockSegments(oldEnd, target);
+    announceMergeScope(oldEnd + 1, target, segments, usedStock);
     return summarizeHistory(segments, target, ignorePrevious ? { previousSummary: '' } : {});
 }
 
@@ -778,9 +794,10 @@ export async function generateActiveSummaryReplacement(options = {}) {
     const start = base ? base.endMsgId + 1 : 0;
     const signature = summarySignature(active);
     regenerationBases.set(active.endMsgId, { signature, start, previousSummary: base?.summary || '' });
-    const { segments } = options.useStock === false
+    const { segments, usedStock = 0 } = options.useStock === false
         ? { segments: [{ history: await processRange(start, active.endMsgId, { includeHidden: true }) }] }
         : await buildStockSegments(start - 1, active.endMsgId, { includeHidden: true });
+    announceMergeScope(start, active.endMsgId, segments, usedStock);
     const result = await summarizeHistory(segments, active.endMsgId, { previousSummary: base?.summary || '', checkpointType: `regeneration:${signature}`, persistCheckpoint: false, addChunkComment: false });
     if (result && summarySignature(rollingSummary) !== signature) {
         errorToast('The active summary changed during regeneration. Generate it again.');
