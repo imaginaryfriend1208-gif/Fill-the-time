@@ -566,10 +566,24 @@ export async function autoStockChunks({ force = false, verbose = false } = {}) {
         let added = 0;
         for (const piece of pieces) {
             if (getContext().chatId !== chatId) break;
+            // A merge may have started after this stocking plan was built. Re-check before
+            // spending a request, and again after the response because the merge may start or
+            // finish while the request is in flight. Never commit a chunk whose first message
+            // is now protected by either the active merge or the newly accepted summary.
+            let protectedThrough = Math.max(rollingSummary?.endMsgId ?? -1, mergeFloor());
+            if (coverFrom <= protectedThrough) {
+                debug(`Stocking plan became stale at ${coverFrom}; protected through ${protectedThrough}. Replanning on the next stock tick.`);
+                break;
+            }
             let summary;
             try { summary = await generateFromText(piece.text, 0, false, null, job); }
             catch (error) { debug('Stock chunk generation failed:', error); break; }
             if (!summary || getContext().chatId !== chatId) break;
+            protectedThrough = Math.max(rollingSummary?.endMsgId ?? -1, mergeFloor());
+            if (coverFrom <= protectedThrough) {
+                debug(`Discarding stale stocked chunk ${coverFrom}-${piece.endId}; protected through ${protectedThrough}.`);
+                break;
+            }
             stockedChunks.push({ summary, fromMsgId: coverFrom, toMsgId: piece.endId, createdAt: new Date().toISOString() });
             coverFrom = piece.endId + 1;
             added++;

@@ -197,6 +197,10 @@ check('concurrency', 'stocking is not hard-blocked by a running merge',
 check('concurrency', 'stocking stays above the running merge target',
     /function mergeFloor/.test(memories) && /stockedChunks\.at\(-1\)\?\.toMsgId \?\? -1, mergeFloor\(\)\)/.test(memories),
     'a chunk inside the merge range would be summarized twice');
+check('concurrency', 'a pre-existing stock plan is revalidated before and after each request',
+    (memories.match(/protectedThrough = Math\.max\(rollingSummary\?\.endMsgId \?\? -1, mergeFloor\(\)\)/g) || []).length >= 2
+    && /Discarding stale stocked chunk/.test(memories),
+    'a merge can begin while a stock request is in flight; its result must then be discarded');
 check('concurrency', 'every merge entry point reserves and releases its range',
     (memories.match(/beginMerge\(/g) || []).length >= 5 && (memories.match(/endMerge\(\)/g) || []).length >= 5);
 check('concurrency', 'destructive restock still blocked during a merge',
