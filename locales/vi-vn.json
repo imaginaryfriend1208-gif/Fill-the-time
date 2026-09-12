@@ -154,5 +154,6 @@
   "rmr_drop_all_stock": "Xoá TOÀN BỘ chunk đã stock",
   "rmr_drop_archive": "Xoá luôn archive của chat này",
   "rmr_restore_latest": "Khôi phục bản mới nhất",
-  "rmr_create_empty": "Tạo bản trống"
+  "rmr_create_empty": "Tạo bản trống",
+  "rmr_stock_during_merge": "Vẫn stock trong lúc đang tạo summary (chỉ các tin phía sau)"
 }

@@ -154,5 +154,6 @@
   "rmr_drop_all_stock": "Supprimer TOUS les fragments stockés",
   "rmr_drop_archive": "Supprimer aussi l'archive de ce chat",
   "rmr_restore_latest": "Restaurer la dernière",
-  "rmr_create_empty": "Créer un résumé vide"
+  "rmr_create_empty": "Créer un résumé vide",
+  "rmr_stock_during_merge": "Continuer le stockage pendant la génération (messages au-delà uniquement)"
 }

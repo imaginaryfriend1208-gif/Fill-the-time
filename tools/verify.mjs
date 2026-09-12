@@ -99,9 +99,9 @@ check('profile-routing', 'no unconditional resolveConnectionProfileId(commandArg
 check('profile-routing', 'stocking overrides chunkProfile, not profile',
     /chunkProfile:\s*settings\.stock_profile/.test(memories) && !/profile:\s*settings\.stock_profile/.test(memories),
     'autoStockChunks/regenerateStockedChunk must use commandArgs.chunkProfile');
-check('profile-routing', 'commandArgs is restored after stocking',
-    (memories.match(/commandArgs = previousArgs/g) || []).length >= 2,
-    'global commandArgs must not leak the stock profile into later merges');
+check('profile-routing', 'stocking never mutates the global commandArgs',
+    !/commandArgs = \{ quiet: !verbose/.test(memories) && !/commandArgs = previousArgs/.test(memories),
+    'stocking owns a private job object, so a concurrent merge keeps its own profile');
 check('profile-routing', 'progress reports the profile in use',
     /profile:\s*(chunkProfileName|mergeProfileName)/.test(memories) && /profile/.test(settingsJs.match(/export function updateChapterProgress[\s\S]{0,900}/)?.[0] || ''),
     'the progress bar should name the profile so the split is verifiable');
@@ -169,11 +169,51 @@ check('css-alignment', 'End ID / Stages inputs are not widthNatural', !/widthNat
 check('css-alignment', 'connection row still even', /rmr-field/.test(html.match(/rmr_profile[\s\S]{0,900}rmr_rate_limit/)?.[0] || ''));
 check('css-alignment', 'mobile stacking preserved', /max-width:700px/.test(css));
 
+// --------------------------------------------------------- concurrency
+check('concurrency', 'internal-generation flag is a depth counter, not a boolean',
+    /let internalGenerationDepth = 0/.test(memories) && !/isInternalGeneration/.test(memories),
+    'a boolean is cleared by whichever concurrent pass finishes first');
+check('concurrency', 'macro and inject filter read the counter',
+    /internalGenerationDepth > 0 \? ''/.test(memories) && /internalGenerationDepth === 0/.test(memories));
+check('concurrency', 'generateFromText takes a per-request job',
+    /async function generateFromText\([^)]*job = null\)/.test(memories) && /const args = job \|\| commandArgs/.test(memories),
+    'stocking must not mutate the global commandArgs while a merge reads it');
+const generateBody = memories.match(/async function generateFromText\([\s\S]*?\n\}/)?.[0] || '';
+check('concurrency', 'generateFromText resolves the profile from the job, not the global',
+    /resolveChunkProfileId\(args\?\.chunkProfile/.test(generateBody)
+    && /resolveMergeProfileId\(args\?\.profile\)/.test(generateBody),
+    'the request path must never read the shared commandArgs for routing');
+check('concurrency', 'generateFromText touches the global only through the job fallback',
+    generateBody.split('\n').filter(line => line.includes('commandArgs') && !line.trim().startsWith('//')).length === 1,
+    'only `const args = job || commandArgs` may mention the global');
+check('concurrency', 'stocking no longer overwrites commandArgs',
+    !/commandArgs = \{ quiet: !verbose/.test(memories) && !/commandArgs = previousArgs/.test(memories),
+    'the save/restore dance is replaced by a private job object');
+check('concurrency', 'rate limiting is per profile and serialized',
+    /const rateLimitChains = new Map\(\)/.test(memories) && /function rateLimitSlot/.test(memories) && !/lastGenerationTimestamp/.test(memories));
+check('concurrency', 'stocking is not hard-blocked by a running merge',
+    !/if \(endChapterInProgress\) \{ if \(verbose\) warningToast/.test(memories),
+    'autoStockChunks must be allowed to run during a merge');
+check('concurrency', 'stocking stays above the running merge target',
+    /function mergeFloor/.test(memories) && /stockedChunks\.at\(-1\)\?\.toMsgId \?\? -1, mergeFloor\(\)\)/.test(memories),
+    'a chunk inside the merge range would be summarized twice');
+check('concurrency', 'every merge entry point reserves and releases its range',
+    (memories.match(/beginMerge\(/g) || []).length >= 5 && (memories.match(/endMerge\(\)/g) || []).length >= 5);
+check('concurrency', 'destructive restock still blocked during a merge',
+    /if \(isMergeRunning\(\)\) \{ rawWarn/.test(memories));
+check('concurrency', 'chunk regeneration refuses chunks inside the merge range',
+    /Number\(fromMsgId\) <= mergeFloor\(\)/.test(memories));
+check('concurrency', 'stocking toasts bypass the shared quiet flag',
+    /const rawInfo = text =>/.test(memories) && /const rawWarn = text =>/.test(memories));
+check('concurrency', 'concurrency can be turned off',
+    /stock_during_merge/.test(memories) && /stock_during_merge/.test(settingsJs) && /rmr_stock_during_merge/.test(html));
+
 // ---------------------------------------------------------------- i18n
 const REQUIRED_KEYS = [
     'rmr_merge_profile', 'rmr_chunk_profile', 'rmr_merge_use_stock', 'rmr_merge_ignore_previous',
     'rmr_archive_hide', 'rmr_archive_show', 'rmr_archive_clear_all', 'rmr_archive_hidden_note',
     'rmr_archive_clear_confirm', 'rmr_use_archive_as_regen_base', 'rmr_stock_delete_all', 'rmr_stock_delete_merged',
+    'rmr_stock_during_merge',
 ];
 for (const locale of ['vi-vn', 'fr-fr']) {
     let data = {};
