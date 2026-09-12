@@ -80,6 +80,7 @@ const defaults = {
     memory_prompt_template: USER_PROMPT, rate_limit: 0, profile: null, hide_chapter: true,
     add_chunk_summaries: false, use_chunk_summaries_as_chapter: false, archive_on_accept: true,
     auto_accept_end: false, auto_stock_chunks: false, stock_profile: null, stock_context_limit: 0,
+    merge_use_stock: true, merge_ignore_previous: false, use_archive_as_regen_base: true,
     chunk_system_prompt: CHUNK_SYSTEM_PROMPT, chunk_prompt_template: CHUNK_USER_PROMPT, use_custom_chunk_prompts: false,
     summarize_presets: [DEFAULT_PRESET, WRITER_DIARY_PRESET, CHARACTER_DIARY_PRESET], current_summarize_preset: DEFAULT_PRESET.id,
     inject_enabled: false, inject_depth: 0, inject_role: extension_prompt_roles.SYSTEM,
@@ -181,7 +182,7 @@ async function loadUI() {
     $('#rmr_chunk_prompt_template').val(settings.chunk_prompt_template).attr('placeholder', CHUNK_USER_PROMPT);
     $('#rmr_inject_prompt').val(settings.inject_prompt).attr('placeholder', INJECT_PROMPT);
     $('#rmr_chapter_button').prop('checked', settings.show_buttons.includes(Buttons.STOP)).off('change').on('change', function () { settings.show_buttons = this.checked ? [Buttons.STOP] : []; save(); resetMessageButtons(); });
-    for (const key of ['hide_chapter','add_chunk_summaries','use_chunk_summaries_as_chapter','archive_on_accept','auto_accept_end']) $(`#rmr_${key}`).prop('checked', !!settings[key]).off('change').on('change', function () { settings[key] = this.checked; save(); });
+    for (const key of ['hide_chapter','add_chunk_summaries','use_chunk_summaries_as_chapter','archive_on_accept','auto_accept_end','use_archive_as_regen_base','merge_use_stock','merge_ignore_previous']) $(`#rmr_${key}`).prop('checked', !!settings[key]).off('change').on('change', function () { settings[key] = this.checked; save(); });
     $('#rmr_auto_stock_chunks').prop('checked', !!settings.auto_stock_chunks).off('change').on('change', async function () {
         settings.auto_stock_chunks = this.checked; save();
         if (this.checked) { const { autoStockChunks } = await import('./memories.js'); autoStockChunks({ verbose: true }); }
@@ -240,7 +241,11 @@ async function loadUI() {
         button.prop('disabled', true);
         try {
             const { autoSplitSummarize } = await import('./memories.js');
-            await autoSplitSummarize(end, stages, { autoAcceptIntermediate: autoAccept });
+            await autoSplitSummarize(end, stages, {
+                autoAcceptIntermediate: autoAccept,
+                useStock: $('#rmr_merge_use_stock').prop('checked'),
+                ignorePrevious: $('#rmr_merge_ignore_previous').prop('checked'),
+            });
         } finally { button.prop('disabled', false); }
     });
     $('#rmr_resume_checkpoint').off('click').on('click', async function () {
@@ -256,6 +261,15 @@ async function loadUI() {
         if (!confirm(getText('rmr_discard_checkpoint_confirm', 'Discard the saved chapter progress?'))) return;
         const { discardPendingCheckpoint } = await import('./memories.js');
         await discardPendingCheckpoint();
+    });
+    $('#rmr_archive_isolate').off('click').on('click', async function () {
+        const { isArchiveIsolated, setArchiveIsolated } = await import('./memories.js');
+        await setArchiveIsolated(!isArchiveIsolated());
+    });
+    $('#rmr_archive_clear').off('click').on('click', async function () {
+        if (!confirm(getText('rmr_archive_clear_confirm', 'Permanently delete every archived summary of this chat?'))) return;
+        const { clearArchiveEntries } = await import('./memories.js');
+        await clearArchiveEntries();
     });
     bindPresets(); $('#rmr_master_export').off('click').on('click', exportConfig); $('#rmr_master_import').off('click').on('click', importConfig);
     initTutorialUI(); await renderActiveSummary(); await renderArchiveList(); renderPendingCheckpoint(); renderStockStatus(); debug('Rolling summary UI loaded');
@@ -326,13 +340,24 @@ export async function openStockViewer() {
     $('#rmr_stock_viewer').remove();
     const overlay = $('<div id="rmr_stock_viewer" class="rmr-summary-popup-overlay"></div>');
     const dialog = $('<div class="rmr-summary-popup"></div>');
-    const header = $(`<div class="rmr-summary-popup-header"><span class="rmr-summary-popup-title">${escapeHtml(getText('rmr_stock_viewer_title', 'Stocked chunk summaries'))}</span><span class="rmr-summary-popup-spacer"></span><button type="button" class="rmr-summary-popup-close"><i class="fa-solid fa-xmark"></i></button></div>`);
+    const header = $(`<div class="rmr-summary-popup-header"><span class="rmr-summary-popup-title">${escapeHtml(getText('rmr_stock_viewer_title', 'Stocked chunk summaries'))}</span><span class="rmr-summary-popup-spacer"></span><button type="button" class="menu_button rmr-stock-delete-merged">${escapeHtml(getText('rmr_stock_delete_merged', 'Delete merged'))}</button><button type="button" class="menu_button rmr-stock-delete-all">${escapeHtml(getText('rmr_stock_delete_all', 'Delete all'))}</button><button type="button" class="rmr-summary-popup-close"><i class="fa-solid fa-xmark"></i></button></div>`);
     const body = $('<div class="rmr-summary-popup-body rmr-stock-viewer-body"></div>');
     dialog.append(header, body);
     overlay.append(dialog);
     $('body').append(overlay);
     const close = () => { $(document).off('keydown.fttStock'); overlay.remove(); };
     header.find('.rmr-summary-popup-close').on('click', close);
+    header.find('.rmr-stock-delete-all').on('click', async () => {
+        if (!confirm(getText('rmr_stock_delete_all_confirm', 'Delete ALL stocked chunk summaries of this chat?'))) return;
+        const { clearStockedChunks } = await import('./memories.js');
+        await clearStockedChunks(); await rebuild();
+    });
+    header.find('.rmr-stock-delete-merged').on('click', async () => {
+        const { clearMergedStockedChunks, getRollingSummary } = await import('./memories.js');
+        const removed = await clearMergedStockedChunks(getRollingSummary()?.endMsgId ?? -1);
+        toastr.info(`${removed} merged chunk(s) removed.`, 'IF Memory');
+        await rebuild();
+    });
     overlay.on('click', event => { if (event.target === overlay[0]) close(); });
     $(document).off('keydown.fttStock').on('keydown.fttStock', event => { if (event.key === 'Escape') close(); });
     const rebuild = async () => {
@@ -367,7 +392,7 @@ export async function openStockViewer() {
 export function updateChapterProgress(state) {
     const box = $('#rmr_chapter_progress'); if (!box.length) return;
     if (!state) { box.hide(); $('#rmr_chapter_progress_fill').css('width', '0%'); renderPendingCheckpoint(); return; }
-    const { phase, current = 0, total = 0, stage } = state;
+    const { phase, current = 0, total = 0, stage, profile } = state;
     const stageText = stage?.total > 1 ? `${getText('rmr_stage', 'Stage')} ${stage.current}/${stage.total} — ` : '';
     let text, percent;
     if (phase === 'final') {
@@ -377,7 +402,7 @@ export function updateChapterProgress(state) {
         text = `${stageText}${getText('rmr_progress_chunk', 'Chunk')} ${Math.min(current + 1, total)}/${total}`;
         percent = total ? Math.round((current / total) * 100) : 0;
     }
-    $('#rmr_chapter_progress_text').text(text);
+    $('#rmr_chapter_progress_text').text(profile ? `${text} \u00b7 ${profile}` : text);
     $('#rmr_chapter_progress_fill').css('width', `${percent}%`);
     box.css('display', 'flex');
     renderPendingCheckpoint();
@@ -444,7 +469,12 @@ export async function renderActiveSummary() {
 }
 export async function renderArchiveList() {
     const container = $('#rmr_archive_container'); if (!container.length) return;
-    const { getArchiveEntries, deleteArchiveEntry } = await import('./memories.js'); const entries = getArchiveEntries(); container.empty();
+    const { getArchiveEntries, deleteArchiveEntry, isArchiveIsolated } = await import('./memories.js'); const entries = getArchiveEntries(); container.empty();
+    const isolated = isArchiveIsolated();
+    $('#rmr_archive_isolate').html(isolated ? `<i class="fa-solid fa-eye"></i> ${escapeHtml(getText('rmr_archive_show', 'Show archive'))}` : `<i class="fa-solid fa-eye-slash"></i> ${escapeHtml(getText('rmr_archive_hide', 'Hide archive'))}`);
+    $('#rmr_archive_clear').toggle(entries.length > 0);
+    $('#rmr_archive_state').text(isolated ? `${getText('rmr_archive_hidden_note', 'Archive hidden: it is ignored by merge and regeneration.')} (${entries.length})` : '');
+    if (isolated) return;
     if (!entries.length) { container.append($('<div class="rmr-summaries-empty">').text(getText('rmr_archive_empty', 'Archive is empty for this chat.'))); return; }
     entries.map((entry, index) => ({ entry, index })).reverse().forEach(({ entry, index }) => {
         const item = $(`<details class="rmr-archive-item"><summary>${escapeHtml(getText('rmr_through', 'Through'))} ${entry.endMsgId} · ${escapeHtml(new Date(entry.archivedAt).toLocaleString())}</summary><pre>${escapeHtml(entry.summary)}</pre><button class="menu_button">${escapeHtml(getText('rmr_delete', 'Delete'))}</button></details>`);
@@ -483,4 +513,24 @@ export function openRegenerationPopup(proposal, endMsgId) {
     });
 }
 function openEditPopup(text){return new Promise(async resolve=>{const {updateRollingSummaryText}=await import('./memories.js');const popup=$('#rmr_summary_popup'),textarea=$('#rmr_popup_textarea');$('#rmr_popup_title').text('Edit Active Summary');$('#rmr_popup_range').text('');textarea.val(text);$('#rmr_popup_archive_wrap,#rmr_popup_resummarize').hide();$('#rmr_popup_save').text('Save').prop('disabled',false);popup.css('display','flex');const cancel=()=>closePopup(resolve,false);$('#rmr_popup_cancel,#rmr_popup_close').off('.ftt').on('click.ftt',cancel);popup.off('.ftt').on('click.ftt',event=>{if(event.target===popup[0])cancel();});$(document).off('keydown.ftt').on('keydown.ftt',event=>{if(event.key==='Escape')cancel();});$('#rmr_popup_save').off('.ftt').on('click.ftt',async()=>{const value=textarea.val().trim();if(value&&await updateRollingSummaryText(value))closePopup(resolve,true);});});}
-export async function showClearOrRestoreDialog(){const {getRollingSummary,getArchiveEntries,restorePreviousFromArchive,clearRollingSummary}=await import('./memories.js');if(!getRollingSummary()){toastr.info('No active summary.','IF Memory');return false;}const canRestore=getArchiveEntries().length>0;return new Promise(resolve=>{const overlay=$(`<div class="rmr-choice-overlay"><div class="rmr-choice-dialog"><h3>Change active summary</h3><p>${canRestore?'Restore the newest archive, create empty, or cancel.':'No archive is available. Create empty or cancel.'}</p><div class="rmr-choice-actions">${canRestore?'<button class="menu_button restore">Restore latest</button>':''}<button class="menu_button empty">Create empty</button><button class="menu_button cancel">Cancel</button></div></div></div>`);$('body').append(overlay);let settled=false;const finish=value=>{if(settled)return;settled=true;$(document).off('keydown.fttChoice');overlay.remove();resolve(value);};overlay.find('.cancel').on('click',()=>finish(false));overlay.on('click',event=>{if(event.target===overlay[0])finish(false);});$(document).off('keydown.fttChoice').on('keydown.fttChoice',event=>{if(event.key==='Escape')finish(false);});overlay.find('.restore').on('click',async()=>finish(await restorePreviousFromArchive()));overlay.find('.empty').on('click',async()=>finish(await clearRollingSummary()));});}
+export async function showClearOrRestoreDialog() {
+    const { getRollingSummary, getArchiveEntries, isArchiveIsolated, restorePreviousFromArchive, clearRollingSummary } = await import('./memories.js');
+    if (!getRollingSummary()) { toastr.info('No active summary.', 'IF Memory'); return false; }
+    const isolated = isArchiveIsolated();
+    const canRestore = getArchiveEntries().length > 0 && !isolated;
+    return new Promise(resolve => {
+        const overlay = $(`<div class="rmr-choice-overlay"><div class="rmr-choice-dialog"><h3>${escapeHtml(getText('rmr_change_active', 'Change active summary'))}</h3><p>${escapeHtml(canRestore ? getText('rmr_change_active_hint', 'Restore the newest archive, create empty, or cancel.') : getText('rmr_change_active_hint_none', 'No usable archive (empty or hidden). Create empty or cancel.'))}</p><label class="checkbox_label"><input type="checkbox" class="checkbox rmr-drop-merged" checked><span>${escapeHtml(getText('rmr_drop_merged_stock', 'Also delete chunks already merged into this summary (recommended)'))}</span></label><label class="checkbox_label"><input type="checkbox" class="checkbox rmr-drop-all"><span>${escapeHtml(getText('rmr_drop_all_stock', 'Delete ALL stocked chunks'))}</span></label><label class="checkbox_label"><input type="checkbox" class="checkbox rmr-drop-archive"><span>${escapeHtml(getText('rmr_drop_archive', 'Also delete this chat archive'))}</span></label><div class="rmr-choice-actions">${canRestore ? `<button class="menu_button restore">${escapeHtml(getText('rmr_restore_latest', 'Restore latest'))}</button>` : ''}<button class="menu_button empty">${escapeHtml(getText('rmr_create_empty', 'Create empty'))}</button><button class="menu_button cancel">${escapeHtml(getText('rmr_cancel', 'Cancel'))}</button></div></div></div>`);
+        $('body').append(overlay);
+        let settled = false;
+        const finish = value => { if (settled) return; settled = true; $(document).off('keydown.fttChoice'); overlay.remove(); resolve(value); };
+        overlay.find('.cancel').on('click', () => finish(false));
+        overlay.on('click', event => { if (event.target === overlay[0]) finish(false); });
+        $(document).off('keydown.fttChoice').on('keydown.fttChoice', event => { if (event.key === 'Escape') finish(false); });
+        overlay.find('.restore').on('click', async () => finish(await restorePreviousFromArchive()));
+        overlay.find('.empty').on('click', async () => finish(await clearRollingSummary({
+            dropMergedStock: overlay.find('.rmr-drop-merged').prop('checked'),
+            dropAllStock: overlay.find('.rmr-drop-all').prop('checked'),
+            dropArchive: overlay.find('.rmr-drop-archive').prop('checked'),
+        })));
+    });
+}

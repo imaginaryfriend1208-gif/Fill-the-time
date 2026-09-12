@@ -99,3 +99,14 @@
 .rmr-tutorial-close { background:none; border:0; color:inherit; cursor:pointer; }
 .rmr-tutorial-highlight { outline:3px solid var(--SmartThemeEmColor) !important; outline-offset:3px; }
 @media(max-width:700px){.rmr-toolbar,.rmr-language-control{align-items:stretch;flex-direction:column}.rmr-language-control select{width:100%}.rmr-summary-popup{width:96vw}.rmr-summary-popup-footer{align-items:stretch}.rmr-summary-popup-footer .menu_button{flex:1}.rmr-choice-actions{flex-direction:column}}
+
+/* Shared two-column field row: boxes align by the row, never by label length. */
+.rmr-field-row { display:flex; align-items:stretch; flex-wrap:nowrap; gap:10px; }
+.rmr-field-row > .rmr-field { flex:1 1 0; min-width:0; }
+.rmr-field { display:flex; flex-direction:column; min-width:0; }
+.rmr-field label { flex:1; display:flex; align-items:flex-end; margin-bottom:3px; }
+.rmr-field label small { color:var(--SmartThemeQuoteColor); line-height:1.3; }
+.rmr-field select, .rmr-field input { width:100%; box-sizing:border-box; margin-top:auto; }
+@media(max-width:700px){.rmr-field-row{flex-direction:column}}
+.rmr-archive-bar { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:0 0 8px; }
+.rmr-archive-state { color:var(--SmartThemeEmColor); font-size:12px; }

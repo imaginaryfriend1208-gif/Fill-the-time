@@ -14,8 +14,10 @@ const INJECT_KEY = 'FILLTHETIME_MEMORY_INJECT';
 const PENDING_KEY = 'fillTheTimePendingChapter';
 const PENDING_SILENT_KEY = 'fillTheTimePendingSilentMerge';
 const STOCK_KEY = 'fillTheTimeStock';
+const ARCHIVE_HIDDEN_KEY = 'fillTheTimeArchiveHidden';
 let rollingSummary = null;
 let archiveEntries = [];
+let archiveIsolated = false;
 let stockedChunks = [];
 let stockInProgress = null;
 let isInternalGeneration = false;
@@ -70,6 +72,8 @@ async function saveData({ chat = false } = {}) {
     if (rollingSummary) context.chatMetadata.fillTheTime = clone(rollingSummary);
     else delete context.chatMetadata.fillTheTime;
     context.chatMetadata.fillTheTimeArchive = clone(archiveEntries);
+    if (archiveIsolated) context.chatMetadata[ARCHIVE_HIDDEN_KEY] = true;
+    else delete context.chatMetadata[ARCHIVE_HIDDEN_KEY];
     await context.saveMetadata();
     if (chat) await context.saveChat();
 }
@@ -91,6 +95,41 @@ async function refreshViews() {
 
 export const getRollingSummary = () => clone(rollingSummary);
 export const getArchiveEntries = () => clone(archiveEntries);
+export const isArchiveIsolated = () => archiveIsolated;
+
+/**
+ * Hide the per-chat archive completely: it stays on disk but is never used as a
+ * regeneration base, can no longer be restored, and the panel collapses it.
+ */
+export async function setArchiveIsolated(value) {
+    const next = Boolean(value);
+    if (next === archiveIsolated) return archiveIsolated;
+    archiveIsolated = next;
+    await saveData();
+    await refreshViews();
+    doneToast(next ? 'Old archive hidden. It is ignored by merges and regeneration.' : 'Archive is visible and usable again.');
+    return archiveIsolated;
+}
+
+/** Permanently delete every archived summary of the current chat. */
+export async function clearArchiveEntries() {
+    const removed = archiveEntries.length;
+    if (!removed) return 0;
+    archiveEntries = [];
+    await saveData();
+    await refreshViews();
+    doneToast(`Deleted ${removed} archived ${removed === 1 ? 'summary' : 'summaries'}.`);
+    return removed;
+}
+
+/** Archive entries that still point at existing messages, oldest first. */
+function usableArchiveEntries() {
+    const chatLength = (getContext().chat || []).length;
+    return archiveEntries
+        .map(normalizeArchive)
+        .filter(entry => entry && entry.endMsgId < chatLength)
+        .sort((a, b) => a.endMsgId - b.endMsgId);
+}
 
 export async function loadRollingSummaryData() {
     draftBases.clear();
@@ -102,6 +141,7 @@ export async function loadRollingSummaryData() {
     stockedChunks = Array.isArray(context.chatMetadata[STOCK_KEY]) ? context.chatMetadata[STOCK_KEY].map(normalizeStockEntry).filter(Boolean).filter(entry => entry.toMsgId < (context.chat || []).length).sort((a, b) => a.fromMsgId - b.fromMsgId) : [];
     rollingSummary = normalizeSummary(context.chatMetadata.fillTheTime);
     archiveEntries = Array.isArray(context.chatMetadata.fillTheTimeArchive) ? context.chatMetadata.fillTheTimeArchive.map(normalizeArchive).filter(Boolean) : [];
+    archiveIsolated = Boolean(context.chatMetadata[ARCHIVE_HIDDEN_KEY]);
     const legacy = parseLegacyTimeline(context.chatMetadata.timeline)
         .map(item => ({ summary: String(item?.summary || '').trim(), endMsgId: Number(item?.endMsgId) }))
         .filter(item => item.summary && Number.isInteger(item.endMsgId) && item.endMsgId >= 0 && item.endMsgId < (context.chat || []).length)
@@ -177,6 +217,10 @@ function unhideRange(start, end) {
 
 export async function restorePreviousFromArchive() {
     if (!rollingSummary) return false;
+    if (archiveIsolated) {
+        warningToast('The archive is hidden for this chat. Show it again before restoring from it.');
+        return false;
+    }
     const chat = getContext().chat || [];
     let restored = null;
     while (archiveEntries.length && !restored) {
@@ -201,7 +245,13 @@ export async function restorePreviousFromArchive() {
     return true;
 }
 
-export async function clearRollingSummary() {
+/**
+ * Drop the active summary.
+ * Chunks that were already merged into it describe a summary that no longer exists,
+ * so by default they are removed too: otherwise the next merge silently re-uses them
+ * (they turn from "merged" into "pending" the moment the active summary is gone).
+ */
+export async function clearRollingSummary({ dropMergedStock = true, dropAllStock = false, dropArchive = false } = {}) {
     const oldEnd = rollingSummary?.endMsgId;
     rollingSummary = null;
     draftBases.clear();
@@ -210,9 +260,16 @@ export async function clearRollingSummary() {
     clearMarkers();
     if (Number.isInteger(oldEnd)) unhideRange(0, oldEnd);
     await clearCheckpoint();
+    let removedStock = 0;
+    if (dropAllStock) { removedStock = stockedChunks.length; await clearStockedChunks(); }
+    else if (dropMergedStock && Number.isInteger(oldEnd)) removedStock = await clearMergedStockedChunks(oldEnd);
+    if (dropArchive && archiveEntries.length) { archiveEntries = []; }
     await saveData({ chat: true });
     await refreshViews();
-    doneToast('Created an empty summary. You can summarize the chat again.');
+    const extra = [];
+    if (removedStock) extra.push(`${removedStock} stocked ${removedStock === 1 ? 'chunk' : 'chunks'} removed`);
+    if (dropArchive) extra.push('archive cleared');
+    doneToast(`Created an empty summary. You can summarize the chat again.${extra.length ? ` (${extra.join(', ')})` : ''}`);
     return true;
 }
 
@@ -242,6 +299,22 @@ export function resolveConnectionProfileId(...ids) {
     for (const id of ids) if (isValidConnectionProfileId(id)) return id;
     const selected = extension_settings?.connectionManager?.selectedProfile;
     return isValidConnectionProfileId(selected) ? selected : null;
+}
+/** Display name of a connection profile (empty string when unknown / no override). */
+export function getProfileName(id) { return profiles().find(profile => profile.id === id)?.name || ''; }
+/**
+ * Profile used for the final merge pass: explicit override -> "Merge Profile" -> current ST profile.
+ */
+export function resolveMergeProfileId(explicit = null) {
+    return resolveConnectionProfileId(explicit, settings?.profile);
+}
+/**
+ * Profile used for every chunk pass (per-chunk digests and background stocking):
+ * explicit override -> "Chunk Profile" (settings.stock_profile) -> merge profile -> current ST profile.
+ * Kept separate so a cheap/fast model can grind chunks while a strong model does the merge.
+ */
+export function resolveChunkProfileId(explicit = null) {
+    return resolveConnectionProfileId(explicit, settings?.stock_profile, settings?.profile);
 }
 
 export function getReasoningEffort(profileId) {
@@ -334,10 +407,22 @@ export async function invalidateStockFrom(messageId) {
 }
 
 export async function clearStockedChunks() {
+    await clearCheckpoint();
     if (!stockedChunks.length) return false;
     stockedChunks = [];
     await saveStock();
     return true;
+}
+
+/** Drop stocked chunks already folded into a summary ending at `endMsgId`. */
+export async function clearMergedStockedChunks(endMsgId) {
+    const end = Number(endMsgId);
+    if (!Number.isInteger(end) || !stockedChunks.length) return 0;
+    const before = stockedChunks.length;
+    stockedChunks = stockedChunks.filter(entry => entry.toMsgId > end);
+    const removed = before - stockedChunks.length;
+    if (removed) { await clearCheckpoint(); await saveStock(); }
+    return removed;
 }
 
 function findStockIndex(fromMsgId, toMsgId) {
@@ -361,7 +446,8 @@ export async function regenerateStockedChunk(fromMsgId, toMsgId, { verbose = tru
     const context = getContext();
     const chatId = context.chatId;
     stockInProgress = true;
-    commandArgs = { quiet: !verbose, profile: settings.stock_profile || undefined };
+    const previousArgs = commandArgs;
+    commandArgs = { quiet: !verbose, chunkProfile: settings.stock_profile || undefined };
     try {
         (await import('./settings.js')).renderStockStatus?.();
         infoToast(`Regenerating stocked chunk (messages ${entry.fromMsgId}-${entry.toMsgId})...`);
@@ -383,6 +469,7 @@ export async function regenerateStockedChunk(fromMsgId, toMsgId, { verbose = tru
     } catch (error) { debug('Stock chunk regeneration failed:', error); errorToast(`Regeneration failed: ${error?.message || error}`); return false; }
     finally {
         stockInProgress = false;
+        commandArgs = previousArgs;
         try { (await import('./settings.js')).renderStockStatus?.(); } catch { /* ignore */ }
     }
 }
@@ -411,7 +498,8 @@ export async function autoStockChunks({ force = false, verbose = false } = {}) {
     if (base >= lastStockable) { if (verbose) infoToast('Everything except the latest message is already summarized or stocked.'); return false; }
     const chatId = context.chatId;
     stockInProgress = true;
-    commandArgs = { quiet: !verbose, profile: settings.stock_profile || undefined };
+    const previousArgs = commandArgs;
+    commandArgs = { quiet: !verbose, chunkProfile: settings.stock_profile || undefined };
     try {
         (await import('./settings.js')).renderStockStatus?.();
         const history = await processRange(base + 1, lastStockable);
@@ -445,12 +533,14 @@ export async function autoStockChunks({ force = false, verbose = false } = {}) {
     } catch (error) { debug('Auto-stock failed:', error); if (verbose) errorToast(`Stocking failed: ${error?.message || error}`); return false; }
     finally {
         stockInProgress = false;
+        commandArgs = previousArgs;
         try { (await import('./settings.js')).renderStockStatus?.(); } catch { /* ignore */ }
     }
 }
 
 async function buildStockSegments(oldEnd, target, processOptions = {}) {
     const segments = [];
+    const usedRanges = [];
     let cursor = oldEnd + 1;
     let usedStock = 0;
     for (const entry of stockedChunks) {
@@ -459,10 +549,12 @@ async function buildStockSegments(oldEnd, target, processOptions = {}) {
         if (entry.fromMsgId > cursor) segments.push({ history: await processRange(cursor, entry.fromMsgId - 1, processOptions) });
         segments.push({ stock: entry.summary });
         usedStock++;
+        usedRanges.push(`${entry.fromMsgId}-${entry.toMsgId}`);
         cursor = entry.toMsgId + 1;
     }
     if (cursor <= target) segments.push({ history: await processRange(cursor, target, processOptions) });
-    return { segments, usedStock };
+    if (usedRanges.length) infoToast(`Reusing ${usedRanges.length} stocked ${usedRanges.length === 1 ? 'chunk' : 'chunks'}: ${usedRanges.join(', ')}`);
+    return { segments, usedStock, usedRanges };
 }
 
 function pendingCheckpoint() { const value = getContext().chatMetadata?.[PENDING_KEY]; return value && typeof value === 'object' ? value : null; }
@@ -540,7 +632,10 @@ async function generateFromText(content, chunk = 0, includePrevious = true, prev
         const messages = [];
         if (systemPrompt.trim()) messages.push({ role: 'system', content: systemPrompt });
         messages.push({ role: 'user', content: userPrompt });
-        const profileId = resolveConnectionProfileId(commandArgs?.profile, settings.profile);
+        // Chunk passes and the merge pass are routed to separate connection profiles.
+        const profileId = isChunkPass
+            ? resolveChunkProfileId(commandArgs?.chunkProfile ?? commandArgs?.profile)
+            : resolveMergeProfileId(commandArgs?.profile);
         const maxTokens = await getMaxTokensForProfile(profileId);
         const override = buildOverridePayload(profileId, maxTokens);
         const effort = getReasoningEffort(profileId);
@@ -591,6 +686,10 @@ async function summarizeHistory(segments, target, options = {}) {
     }
     if (!ordered.length) { warningToast('No visible content to summarize.'); return ''; }
     worldInfoCache = null;
+    const chunkProfileName = getProfileName(resolveChunkProfileId(commandArgs?.chunkProfile ?? commandArgs?.profile));
+    const mergeProfileName = getProfileName(resolveMergeProfileId(commandArgs?.profile));
+    // Fingerprint of the segment layout: a checkpoint may only resume onto an identical plan.
+    const stockKey = ordered.map(item => item.type === 'stock' ? `s:${item.text.length}` : `f:${item.startId}`).join('|');
     const fresh = ordered.filter(item => item.type === 'fresh');
     const stockCount = ordered.length - fresh.length;
     const start = fresh[0]?.startId ?? 0;
@@ -600,21 +699,21 @@ async function summarizeHistory(segments, target, options = {}) {
     const pendingType = pending?.checkpointType || 'forward';
     const totalPieces = ordered.length;
     const needChunkPass = totalPieces > 1 && fresh.length > 0;
-    let summaries = pending && pendingType === checkpointType && Number(pending.startMsgId) === start && Number(pending.targetMessageId) === target && Number(pending.chunkCount) === fresh.length && Array.isArray(pending.chunkSummaries) ? [...pending.chunkSummaries] : [];
+    let summaries = pending && pendingType === checkpointType && Number(pending.startMsgId) === start && Number(pending.targetMessageId) === target && Number(pending.chunkCount) === fresh.length && pending.stockKey === stockKey && Array.isArray(pending.chunkSummaries) ? [...pending.chunkSummaries] : [];
     if (summaries.length) infoToast(`Resuming from chunk ${summaries.length + 1}/${fresh.length}.`);
     if (stockCount) infoToast(`Using ${stockCount} stocked chunk ${stockCount === 1 ? 'summary' : 'summaries'}.`);
     if (needChunkPass) {
         while (summaries.length < fresh.length) {
             const index = summaries.length;
-            await setProgress({ phase: 'chunks', current: stockCount + index, total: totalPieces });
+            await setProgress({ phase: 'chunks', current: stockCount + index, total: totalPieces, profile: chunkProfileName });
             try {
                 const result = await generateFromText(fresh[index].text, index + 1, false);
                 if (!result) throw new Error('Empty chunk summary');
                 summaries.push(result);
-                if (persistCheckpoint) await saveCheckpoint({ checkpointType, targetMessageId: target, startMsgId: start, chunkCount: fresh.length, chunkSummaries: summaries, stage: 'chunks' });
-                await setProgress({ phase: 'chunks', current: stockCount + summaries.length, total: totalPieces });
+                if (persistCheckpoint) await saveCheckpoint({ checkpointType, stockKey, targetMessageId: target, startMsgId: start, chunkCount: fresh.length, chunkSummaries: summaries, stage: 'chunks' });
+                await setProgress({ phase: 'chunks', current: stockCount + summaries.length, total: totalPieces, profile: chunkProfileName });
             } catch (error) {
-                if (persistCheckpoint) await saveCheckpoint({ checkpointType, targetMessageId: target, startMsgId: start, chunkCount: fresh.length, chunkSummaries: summaries, stage: 'chunk', failedChunkIndex: index, error: error?.message || String(error) });
+                if (persistCheckpoint) await saveCheckpoint({ checkpointType, stockKey, targetMessageId: target, startMsgId: start, chunkCount: fresh.length, chunkSummaries: summaries, stage: 'chunk', failedChunkIndex: index, error: error?.message || String(error) });
                 errorToast(persistCheckpoint ? `Summary failed at chunk ${index + 1}/${fresh.length}. Progress was saved.` : `Summary failed at chunk ${index + 1}/${fresh.length}.`);
                 await setProgress(null);
                 return '';
@@ -630,12 +729,12 @@ async function summarizeHistory(segments, target, options = {}) {
             const previous = options.previousSummary ?? rollingSummary?.summary ?? '';
             result = previous ? `${previous}\n\n${combined}`.trim() : combined;
         } else {
-            await setProgress({ phase: 'final', current: totalPieces, total: totalPieces });
+            await setProgress({ phase: 'final', current: totalPieces, total: totalPieces, profile: mergeProfileName });
             result = await generateFromText(combined, 0, true, options.previousSummary);
         }
     }
     catch (error) {
-        if (persistCheckpoint) await saveCheckpoint({ checkpointType, targetMessageId: target, startMsgId: start, chunkCount: fresh.length, chunkSummaries: summaries, stage: 'final', error: error?.message || String(error) });
+        if (persistCheckpoint) await saveCheckpoint({ checkpointType, stockKey, targetMessageId: target, startMsgId: start, chunkCount: fresh.length, chunkSummaries: summaries, stage: 'final', error: error?.message || String(error) });
         errorToast(persistCheckpoint ? 'Final summary failed. Chunk progress was saved.' : 'Final summary failed.');
         await setProgress(null);
         return '';
@@ -658,8 +757,11 @@ export async function generateRollingSummary(messageId, options = {}) {
     const oldEnd = rollingSummary?.endMsgId ?? -1;
     if (target <= oldEnd) { errorToast(`Choose a message after ${oldEnd}; earlier content is already summarized.`); return ''; }
     draftBases.set(target, { endMsgId: oldEnd, updatedAt: rollingSummary?.updatedAt || null, summary: rollingSummary?.summary || '' });
-    const { segments } = options.useStock === false ? { segments: [{ history: await processRange(oldEnd + 1, target) }] } : await buildStockSegments(oldEnd, target);
-    return summarizeHistory(segments, target);
+    const useStock = options.useStock ?? settings.merge_use_stock ?? true;
+    const ignorePrevious = options.ignorePrevious ?? settings.merge_ignore_previous ?? false;
+    if (ignorePrevious) infoToast('Fresh merge: the previous summary is not sent to the model.');
+    const { segments } = useStock === false ? { segments: [{ history: await processRange(oldEnd + 1, target) }] } : await buildStockSegments(oldEnd, target);
+    return summarizeHistory(segments, target, ignorePrevious ? { previousSummary: '' } : {});
 }
 
 function summarySignature(value) {
@@ -670,10 +772,9 @@ export async function generateActiveSummaryReplacement(options = {}) {
     if (!rollingSummary) { warningToast('No active summary to regenerate.'); return ''; }
     commandArgs = { ...options };
     const active = clone(rollingSummary);
-    const base = archiveEntries
-        .filter(entry => Number(entry.endMsgId) < active.endMsgId)
-        .sort((a, b) => a.endMsgId - b.endMsgId)
-        .at(-1) || null;
+    const ignoreArchive = Boolean(options.ignoreArchive ?? options.ignorePrevious ?? (archiveIsolated || settings.use_archive_as_regen_base === false));
+    const base = ignoreArchive ? null : (usableArchiveEntries().filter(entry => entry.endMsgId < active.endMsgId).at(-1) || null);
+    if (ignoreArchive) infoToast('Regenerating without using the archive as a base.');
     const start = base ? base.endMsgId + 1 : 0;
     const signature = summarySignature(active);
     regenerationBases.set(active.endMsgId, { signature, start, previousSummary: base?.summary || '' });

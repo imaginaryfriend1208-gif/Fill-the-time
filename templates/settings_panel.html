@@ -31,15 +31,19 @@
 
 Trigger: click ⏹ on a message, or enter an End ID and click Create Chapter." data-i18n-tip="rmr_info_rolling_summary">i</span></h4>
             <div class="rmr-extension_block rmr-manual-chapter">
-                <div class="flex-container marginTopBot5">
-                    <div class="flex-container flex1 flexFlowColumn">
+                <div class="flex-container marginTopBot5 rmr-field-row">
+                    <div class="flexFlowColumn rmr-field">
                         <label for="rmr_create_chapter_end"><small data-i18n="rmr_create_chapter_end">End Message ID (blank = latest)</small></label>
-                        <input class="text_pole widthNatural" id="rmr_create_chapter_end" type="number" min="0" placeholder="latest">
+                        <input class="text_pole" id="rmr_create_chapter_end" type="number" min="0" placeholder="latest">
                     </div>
-                    <div class="flex-container flex1 flexFlowColumn">
+                    <div class="flexFlowColumn rmr-field">
                         <label for="rmr_split_stages"><small data-i18n="rmr_split_stages">Stages (1 = single, 0 = auto by tokens)</small></label>
-                        <input class="text_pole widthNatural" id="rmr_split_stages" type="number" min="0" value="1">
+                        <input class="text_pole" id="rmr_split_stages" type="number" min="0" value="1">
                     </div>
+                </div>
+                <div class="flex-container flexFlowColumn marginTopBot5">
+                    <label class="checkbox_label" for="rmr_merge_use_stock"><input id="rmr_merge_use_stock" class="checkbox" type="checkbox"><span data-i18n="rmr_merge_use_stock">Reuse stocked chunks when merging</span></label>
+                    <label class="checkbox_label" for="rmr_merge_ignore_previous"><input id="rmr_merge_ignore_previous" class="checkbox" type="checkbox"><span data-i18n="rmr_merge_ignore_previous">Fresh merge: ignore the previous summary and the archive</span></label>
                 </div>
                 <div class="flex-container flexGap5 marginTopBot5">
                     <button type="button" class="menu_button" id="rmr_create_chapter"><i class="fa-solid fa-plus"></i> <span data-i18n="rmr_create_chapter">Create Chapter</span></button>
@@ -89,15 +93,22 @@ Token budget: limits how many tokens the meter shows (0 = model context)." data-
             </div>
             <div class="rmr-extension_block"><div id="rmr_active_summary_container" class="rmr-summaries-container"></div></div>
             <h4><i class="fa-solid fa-box-archive"></i> <span data-i18n="rmr_archive_for_chat">Archive for this chat</span><span class="rmr-info-icon" data-tip="Each chat keeps its own archive. When you accept a summary update, the previous version can be archived here. You can restore any archived version as the active summary." data-i18n-tip="rmr_info_archive"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6.7"/><path d="M8 7.2v4" stroke-linecap="round"/><circle cx="8" cy="4.9" r=".85" fill="currentColor" stroke="none"/></svg></span></h4>
-            <div class="rmr-extension_block"><div id="rmr_archive_container" class="rmr-archive-container"></div></div>
+            <div class="rmr-extension_block">
+                <div class="rmr-archive-bar">
+                    <button type="button" class="menu_button" id="rmr_archive_isolate"><i class="fa-solid fa-eye-slash"></i> <span data-i18n="rmr_archive_hide">Hide archive</span></button>
+                    <button type="button" class="menu_button" id="rmr_archive_clear" style="display:none"><i class="fa-solid fa-trash-can"></i> <span data-i18n="rmr_archive_clear_all">Delete all</span></button>
+                    <span id="rmr_archive_state" class="rmr-archive-state"></span>
+                </div>
+                <div id="rmr_archive_container" class="rmr-archive-container"></div>
+            </div>
 
             <hr>
 
             <h4 data-i18n="rmr_summarization_connection">Summarization Connection<span class="rmr-info-icon" data-tip="Override the API profile used for summarization (separate from your chat profile). Stock Profile is used for background chunk stocking. Rate Limit throttles API requests (0 = unlimited)." data-i18n-tip="rmr_info_connection"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6.7"/><path d="M8 7.2v4" stroke-linecap="round"/><circle cx="8" cy="4.9" r=".85" fill="currentColor" stroke="none"/></svg></span></h4>
-            <div class="rmr-extension_block flex-container marginTopBot5 rmr-connection-row">
-                <div class="flex-container flex1 flexFlowColumn rmr-field"><label for="rmr_profile"><small data-i18n="rmr_connection_profile">Connection Profile</small></label><select class="text_pole" id="rmr_profile"><option value="" data-i18n="rmr_no_override">-- No Override --</option></select></div>
-                <div class="flex-container flex1 flexFlowColumn rmr-field"><label for="rmr_stock_profile"><small data-i18n="rmr_stock_profile">Stock Profile (background chunks; blank = same)</small></label><select class="text_pole" id="rmr_stock_profile"><option value="" data-i18n="rmr_no_override">-- No Override --</option></select></div>
-                <div class="flex-container flex1 flexFlowColumn rmr-field"><label for="rmr_rate_limit"><small data-i18n="rmr_rate_limit">Max Requests per Minute (0 = unlimited)</small></label><input class="text_pole" id="rmr_rate_limit" type="number" min="0"></div>
+            <div class="rmr-extension_block flex-container marginTopBot5 rmr-connection-row rmr-field-row">
+                <div class="flexFlowColumn rmr-field"><label for="rmr_profile"><small data-i18n="rmr_merge_profile">Merge Profile (final rolling summary)</small></label><select class="text_pole" id="rmr_profile"><option value="" data-i18n="rmr_no_override">-- No Override --</option></select></div>
+                <div class="flexFlowColumn rmr-field"><label for="rmr_stock_profile"><small data-i18n="rmr_chunk_profile">Chunk Profile (chunk digests + stocking; blank = same as merge)</small></label><select class="text_pole" id="rmr_stock_profile"><option value="" data-i18n="rmr_no_override">-- No Override --</option></select></div>
+                <div class="flexFlowColumn rmr-field"><label for="rmr_rate_limit"><small data-i18n="rmr_rate_limit">Max Requests per Minute (0 = unlimited)</small></label><input class="text_pole" id="rmr_rate_limit" type="number" min="0"></div>
             </div>
             <hr>
 
@@ -153,6 +164,7 @@ Use chunks directly: skip the merge pass and concatenate chunk digests as the fi
                 <label class="checkbox_label" for="rmr_hide_chapter"><input id="rmr_hide_chapter" class="checkbox" type="checkbox"><span data-i18n="rmr_hide_chapter">Hide messages after accepting their summary</span></label>
                 <label class="checkbox_label" for="rmr_archive_on_accept"><input id="rmr_archive_on_accept" class="checkbox" type="checkbox"><span data-i18n="rmr_archive_on_accept">Archive the previous summary by default</span></label>
                 <label class="checkbox_label" for="rmr_add_chunk_summaries"><input id="rmr_add_chunk_summaries" class="checkbox" type="checkbox"><span data-i18n="rmr_add_chunk_summaries">Add chunk summaries as a chat comment</span></label>
+                <label class="checkbox_label" for="rmr_use_archive_as_regen_base"><input id="rmr_use_archive_as_regen_base" class="checkbox" type="checkbox"><span data-i18n="rmr_use_archive_as_regen_base">Use the newest archive as the base when regenerating</span></label>
                 <label class="checkbox_label" for="rmr_use_chunk_summaries_as_chapter"><input id="rmr_use_chunk_summaries_as_chapter" class="checkbox" type="checkbox"><span data-i18n="rmr_use_chunk_summaries">Use chunk summaries directly as final summary</span></label>
             </div>
             <hr>
@@ -162,9 +174,9 @@ Macros: {{fillthetime}}, {{lastMessageId}}, {{firstIncludedMessageId}}." data-i1
             <div class="rmr-extension_block">
                 <p><small data-i18n="rmr_inject_hint">Normally, put {{fillthetime}} in a Prompt Manager entry. Enable this only if you prefer automatic depth injection.</small></p>
                 <label class="checkbox_label" for="rmr_inject_enabled"><input id="rmr_inject_enabled" class="checkbox" type="checkbox"><span data-i18n="rmr_inject_enabled">Enable automatic summary injection</span></label>
-                <div class="flex-container marginTopBot5">
-                    <div class="flex-container flex1 flexFlowColumn"><label for="rmr_inject_depth"><small data-i18n="rmr_inject_depth">Depth</small></label><input class="text_pole" id="rmr_inject_depth" type="number" min="0" max="999"></div>
-                    <div class="flex-container flex1 flexFlowColumn"><label for="rmr_inject_role"><small data-i18n="rmr_inject_role">Role</small></label><select class="text_pole" id="rmr_inject_role"></select></div>
+                <div class="flex-container marginTopBot5 rmr-field-row">
+                    <div class="flexFlowColumn rmr-field"><label for="rmr_inject_depth"><small data-i18n="rmr_inject_depth">Depth</small></label><input class="text_pole" id="rmr_inject_depth" type="number" min="0" max="999"></div>
+                    <div class="flexFlowColumn rmr-field"><label for="rmr_inject_role"><small data-i18n="rmr_inject_role">Role</small></label><select class="text_pole" id="rmr_inject_role"></select></div>
                 </div>
                 <label for="rmr_inject_prompt"><small data-i18n="rmr_inject_prompt">Injection Prompt — supports {{fillthetime}}, {{lastMessageId}}, {{firstIncludedMessageId}}</small></label>
                 <textarea rows="7" class="margin0 text_pole textarea_compact" id="rmr_inject_prompt"></textarea>
