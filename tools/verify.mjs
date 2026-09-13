@@ -129,8 +129,9 @@ check('profile-routing', 'progress reports the profile in use',
 
 // ----------------------------------------------------- archive isolation
 check('archive-isolation', 'per-chat metadata key exists', /fillTheTimeArchiveHidden/.test(memories));
-check('archive-isolation', 'isolation state is loaded on chat load',
-    /archiveIsolated\s*=\s*Boolean\(/.test(memories));
+check('archive-isolation', 'archive is hidden by default; only an explicit per-chat "shown" flag reveals it',
+    /let archiveIsolated = true;/.test(memories) && /archiveIsolated\s*=\s*!context\.chatMetadata\[ARCHIVE_SHOWN_KEY\]/.test(memories),
+    'default must be hidden (user requirement #6)');
 const regenerationBody = memories.slice(memories.indexOf('export async function generateActiveSummaryReplacement'), memories.indexOf('export async function acceptActiveSummaryReplacement'));
 const stockSegmentsBody = memories.slice(memories.indexOf('async function buildStockSegments'), memories.indexOf('function announceMergeScope'));
 check('archive-isolation', 'regeneration always starts from message zero without archive state',
@@ -242,7 +243,8 @@ check('concurrency', 'chunk regeneration refuses chunks inside the merge range',
 check('concurrency', 'stocking toasts bypass the shared quiet flag',
     /const rawInfo = text =>/.test(memories) && /const rawWarn = text =>/.test(memories));
 check('concurrency', 'concurrency can be turned off',
-    /stock_during_merge/.test(memories) && /stock_during_merge/.test(settingsJs) && /rmr_stock_during_merge/.test(html));
+    !/stock_during_merge/.test(memories) && !/rmr_stock_during_merge/.test(html),
+    'concurrency is always on; the toggle was removed in v4');
 
 // -------------------------------------------------- prompt substitution
 check('prompt-substitution', 'summarization macros are filled in one pass via a callback',
@@ -268,12 +270,37 @@ check('prompt-substitution', 'the executable prompt test ships with the extensio
     existsSync(join(root, 'tools/test-prompts.mjs')),
     'static checks cannot prove what the model actually receives');
 
+// ------------------------------------------------------------ v4 routing
+check('v4-routing', 'chunk pass always uses the chunk prompts (no toggle)',
+    /const useChunkPrompts = isChunkPass;/.test(memories) && !/use_custom_chunk_prompts/.test(memories) && !/use_custom_chunk_prompts/.test(settingsJs.split('const obsolete')[0]),
+    'chunk digests must never be produced with the merge prompt');
+check('v4-routing', 'no silent fallback to the chat API',
+    !/generateQuietPrompt/.test(memories),
+    'a broken summarization profile must fail loudly, never leak onto the chat connection');
+check('v4-routing', 'finish_reason is read from the raw response',
+    /extractData:\s*false/.test(memories) && /function extractFinishReason/.test(memories));
+check('v4-routing', 'per-pass max tokens are honoured',
+    /settings\.merge_max_tokens/.test(memories) && /settings\.chunk_max_tokens/.test(memories) && /merge_max_tokens/.test(settingsJs));
+check('v4-routing', 'truncated merges are continued, never auto-accepted',
+    /CONTINUATION_PROMPT/.test(memories) && /lastGenerationTruncated/.test(memories.match(/export async function endChapterSilent[\s\S]*?\n\}/)?.[0] || ''),
+    'a cut-off summary must go to review instead of overwriting the active summary');
+check('v4-routing', 'hidden messages carry an ownership marker',
+    /extra\.fillTheTimeHidden = true/.test(memories) && /message\?\.extra\?\.fillTheTimeHidden/.test(memories),
+    'Clear/Restore must not unhide messages the user hid by hand');
+check('v4-routing', 'no chat message insertion (/comment) remains',
+    !/\/comment at=/.test(memories) && !/pendingChunkComments/.test(memories) && !/add_chunk_summaries/.test(html),
+    'inserting a message shifts every later chunk id');
+check('v4-routing', 'checkpoint fingerprint hashes content',
+    /function fingerprint/.test(memories) && !/s:\$\{item\.text\.length\}/.test(memories));
+check('v4-routing', 'archive is hidden by default per chat',
+    /let archiveIsolated = true;/.test(memories) && /fillTheTimeArchiveShown/.test(memories));
+
 // ---------------------------------------------------------------- i18n
 const REQUIRED_KEYS = [
     'rmr_merge_profile', 'rmr_chunk_profile',
     'rmr_archive_hide', 'rmr_archive_show', 'rmr_archive_clear_all', 'rmr_archive_hidden_note',
     'rmr_archive_clear_confirm', 'rmr_stock_delete_all', 'rmr_stock_delete_merged',
-    'rmr_stock_during_merge',
+    'rmr_merge_max_tokens', 'rmr_chunk_max_tokens', 'rmr_merge_continuations',
 ];
 for (const locale of ['vi-vn', 'fr-fr']) {
     let data = {};

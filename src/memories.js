@@ -17,10 +17,11 @@ const INJECT_KEY = 'FILLTHETIME_MEMORY_INJECT';
 const PENDING_KEY = 'fillTheTimePendingChapter';
 const PENDING_SILENT_KEY = 'fillTheTimePendingSilentMerge';
 const STOCK_KEY = 'fillTheTimeStock';
-const ARCHIVE_HIDDEN_KEY = 'fillTheTimeArchiveHidden';
+const ARCHIVE_SHOWN_KEY = 'fillTheTimeArchiveShown';
+const LEGACY_ARCHIVE_HIDDEN_KEY = 'fillTheTimeArchiveHidden';
 let rollingSummary = null;
 let archiveEntries = [];
-let archiveIsolated = false;
+let archiveIsolated = true;
 let stockedChunks = [];
 let stockInProgress = null;
 // Depth, not a boolean: a chunk pass and a merge pass can now be in flight at the same
@@ -35,9 +36,10 @@ let endChapterSilentActive = false;
 // Highest message id reserved by a merge running right now (null = none). Stocking stays
 // strictly above it so the two never touch the same messages.
 let activeMergeTarget = null;
+let lastGenerationTruncated = false;
+const CONTINUATION_PROMPT = 'Your previous answer was cut off by the output limit. Continue exactly from where it stopped. Do not repeat anything already written, do not add a preamble, do not summarize what came before. Output only the continuation text.';
 const draftBases = new Map();
 const regenerationBases = new Map();
-const pendingChunkComments = new Map();
 let progressStage = null;
 
 async function setProgress(state) {
@@ -60,6 +62,16 @@ const rawWarn = text => notify.error('stock', text);
 const rawError = text => notify.error('stock', text);
 
 /** Highest message id currently claimed by an in-flight merge, or -1 when idle. */
+/** Cheap, stable content fingerprint (FNV-1a 32-bit) used to detect changed inputs. */
+function fingerprint(text) {
+    let hash = 0x811c9dc5;
+    const value = String(text || '');
+    for (let index = 0; index < value.length; index++) {
+        hash ^= value.charCodeAt(index);
+        hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    return `${value.length}:${hash.toString(16)}`;
+}
 function mergeFloor() { return Number.isInteger(activeMergeTarget) ? activeMergeTarget : -1; }
 export function getMergeFloor() { return mergeFloor(); }
 function beginMerge(target) {
@@ -118,8 +130,9 @@ async function saveData({ chat = false } = {}) {
     if (rollingSummary) context.chatMetadata.fillTheTime = clone(rollingSummary);
     else delete context.chatMetadata.fillTheTime;
     context.chatMetadata.fillTheTimeArchive = clone(archiveEntries);
-    if (archiveIsolated) context.chatMetadata[ARCHIVE_HIDDEN_KEY] = true;
-    else delete context.chatMetadata[ARCHIVE_HIDDEN_KEY];
+    if (archiveIsolated) delete context.chatMetadata[ARCHIVE_SHOWN_KEY];
+    else context.chatMetadata[ARCHIVE_SHOWN_KEY] = true;
+    delete context.chatMetadata[LEGACY_ARCHIVE_HIDDEN_KEY];
     await context.saveMetadata();
     if (chat) await context.saveChat();
 }
@@ -153,7 +166,7 @@ export async function setArchiveIsolated(value) {
     archiveIsolated = next;
     await saveData();
     await refreshViews();
-    doneToast(next ? 'Old archive hidden. It is ignored by merges and regeneration.' : 'Archive is visible and usable again.');
+    doneToast(next ? 'Archive hidden.' : 'Archive shown. It is still never used by merges or regeneration.');
     return archiveIsolated;
 }
 
@@ -180,14 +193,14 @@ function usableArchiveEntries() {
 export async function loadRollingSummaryData() {
     draftBases.clear();
     regenerationBases.clear();
-    pendingChunkComments.clear();
     worldInfoCache = null;
     const context = getContext();
     context.chatMetadata ||= {};
     stockedChunks = Array.isArray(context.chatMetadata[STOCK_KEY]) ? context.chatMetadata[STOCK_KEY].map(normalizeStockEntry).filter(Boolean).filter(entry => entry.toMsgId < (context.chat || []).length).sort((a, b) => a.fromMsgId - b.fromMsgId) : [];
     rollingSummary = normalizeSummary(context.chatMetadata.fillTheTime);
     archiveEntries = Array.isArray(context.chatMetadata.fillTheTimeArchive) ? context.chatMetadata.fillTheTimeArchive.map(normalizeArchive).filter(Boolean) : [];
-    archiveIsolated = Boolean(context.chatMetadata[ARCHIVE_HIDDEN_KEY]);
+    // Hidden by default. Only an explicit "show" persists; the legacy hidden flag is simply dropped.
+    archiveIsolated = !context.chatMetadata[ARCHIVE_SHOWN_KEY];
     const legacy = parseLegacyTimeline(context.chatMetadata.timeline)
         .map(item => ({ summary: String(item?.summary || '').trim(), endMsgId: Number(item?.endMsgId) }))
         .filter(item => item.summary && Number.isInteger(item.endMsgId) && item.endMsgId >= 0 && item.endMsgId < (context.chat || []).length)
@@ -250,13 +263,19 @@ function clearMarkers() {
     for (const message of getContext().chat || []) if (message?.extra?.rmr_chapter) message.extra.rmr_chapter = false;
 }
 
+/**
+ * Unhide only messages this extension hid. `is_system` is SillyTavern's shared flag, so a message
+ * the user hid by hand must survive a Clear/Restore untouched.
+ */
 function unhideRange(start, end) {
     const chat = getContext().chat || [];
     start = Math.max(0, Number(start) || 0);
     end = Math.min(Number(end), chat.length - 1);
     for (let index = start; index <= end; index++) {
-        if (!chat[index]) continue;
-        chat[index].is_system = false;
+        const message = chat[index];
+        if (!message?.extra?.fillTheTimeHidden) continue;
+        message.is_system = false;
+        delete message.extra.fillTheTimeHidden;
         $(`.mes[mesid="${index}"]`).attr('is_system', 'false');
     }
 }
@@ -302,7 +321,6 @@ export async function clearRollingSummary({ dropArchive = false } = {}) {
     rollingSummary = null;
     draftBases.clear();
     regenerationBases.clear();
-    pendingChunkComments.clear();
     clearMarkers();
     if (Number.isInteger(oldEnd)) unhideRange(0, oldEnd);
     await clearCheckpoint();
@@ -414,14 +432,47 @@ export function buildOverridePayload(profileId, maxTokens) {
     return { max_tokens: undefined, max_completion_tokens: maxTokens, temperature: 1, top_p: undefined, frequency_penalty: undefined, presence_penalty: undefined };
 }
 
-async function sendRequest(profileId, messages, maxTokens, overridePayload, job = null) {
-    if (profileId && ConnectionManagerRequestService) {
-        try { return await ConnectionManagerRequestService.sendRequest(profileId, messages, maxTokens, { includePreset: true, includeInstruct: true, stream: false }, overridePayload); }
-        catch (error) { debug('Profile request failed; falling back:', error); }
+/**
+ * Send one summarization request through the given Connection Manager profile.
+ * Returns { content, finishReason }. `finishReason` is 'length' when the provider reports the
+ * output hit max_tokens, 'stop' when it finished naturally, or null when unknown.
+ *
+ * There is deliberately no fallback to the main chat API: the whole point of the Merge/Chunk
+ * profiles is that summaries never leak onto the chat connection. A broken profile fails loudly.
+ */
+async function sendRequest(profileId, messages, maxTokens, overridePayload) {
+    if (!profileId) throw new Error('No Connection Manager profile is configured for summarization. Set a Merge Profile (and optionally a Chunk Profile) under "Summarization Connection".');
+    if (!ConnectionManagerRequestService) throw new Error('Connection Manager is not available. Enable the Connection Manager extension.');
+    let raw;
+    try {
+        raw = await ConnectionManagerRequestService.sendRequest(profileId, messages, maxTokens, { includePreset: true, includeInstruct: true, stream: false, extractData: false }, overridePayload);
+    } catch (error) {
+        const reason = error?.cause?.message || error?.message || String(error);
+        throw new Error(`Summarization profile "${getProfileName(profileId) || profileId}" failed: ${reason}`);
     }
-    if ((job || commandArgs)?.background) throw new Error('Background merge requires a dedicated Connection Manager profile (Summarization Connection). Configure one in IF Memory settings.');
-    const { generateQuietPrompt } = await import('../../../../../script.js');
-    return { content: await generateQuietPrompt({ quietPrompt: messages.map(item => item.content).join('\n\n') }) };
+    return { content: extractContent(raw), finishReason: extractFinishReason(raw) };
+}
+
+/** Pull the assistant text out of a raw chat-completion / text-completion response. */
+function extractContent(raw) {
+    if (raw == null) return '';
+    if (typeof raw === 'string') return raw;
+    if (typeof raw.content === 'string') return raw.content;
+    if (Array.isArray(raw.content)) return raw.content.filter(part => part?.type === 'text').map(part => part.text).join('\n\n');
+    const choice = raw.choices?.[0];
+    if (choice) return choice.message?.content ?? choice.text ?? '';
+    if (Array.isArray(raw.candidates)) return raw.candidates[0]?.content?.parts?.map(part => part.text || '').join('') || '';
+    return raw.text ?? raw.message?.content?.[0]?.text ?? raw.output ?? raw.results?.[0]?.text ?? '';
+}
+
+/** Normalize the provider's finish reason to 'length' | 'stop' | null. */
+function extractFinishReason(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const value = raw.choices?.[0]?.finish_reason ?? raw.stop_reason ?? raw.candidates?.[0]?.finishReason ?? raw.finish_reason ?? null;
+    if (value == null) return null;
+    const text = String(value).toLowerCase();
+    if (['length', 'max_tokens', 'max_output_tokens', 'maxtokens'].includes(text)) return 'length';
+    return 'stop';
 }
 
 function normalizeStockEntry(value) {
@@ -553,10 +604,6 @@ export async function restockChunks() {
 
 export async function autoStockChunks({ force = false, verbose = false } = {}) {
     if (stockInProgress) { if (verbose) rawInfo('Stocking is already running.'); return false; }
-    if (isMergeRunning() && settings?.stock_during_merge === false) {
-        if (verbose) rawWarn('A rolling summary is being generated. Try again later.');
-        return false;
-    }
     if (!settings?.auto_stock_chunks && !force) return false;
     const context = getContext();
     const chat = context.chat || [];
@@ -717,7 +764,8 @@ async function generateFromText(content, chunk = 0, includePrevious = true, prev
     try {
         const context = getContext();
         const previous = includePrevious ? (previousOverride ?? getActiveSummaryText()) : '';
-        const useChunkPrompts = isChunkPass && settings.use_custom_chunk_prompts;
+        // Chunk passes always use the chunk prompts; the merge pass always uses the merge prompts.
+        const useChunkPrompts = isChunkPass;
         const userTemplate = useChunkPrompts ? settings.chunk_prompt_template : settings.memory_prompt_template;
         const systemTemplate = useChunkPrompts ? settings.chunk_system_prompt : settings.memory_system_prompt;
         // One pass, callback form, for two separate reasons:
@@ -743,17 +791,42 @@ async function generateFromText(content, chunk = 0, includePrevious = true, prev
         const messages = [];
         if (systemPrompt.trim()) messages.push({ role: 'system', content: systemPrompt });
         messages.push({ role: 'user', content: userPrompt });
-        const maxTokens = await getMaxTokensForProfile(profileId);
+        const configuredMax = Number(isChunkPass ? settings.chunk_max_tokens : settings.merge_max_tokens) || 0;
+        const maxTokens = configuredMax > 0 ? configuredMax : await getMaxTokensForProfile(profileId);
         const override = buildOverridePayload(profileId, maxTokens);
         const effort = getReasoningEffort(profileId);
         if (effort !== undefined) override.reasoning_effort = effort;
         const include = getIncludeReasoning(profileId);
         if (include !== undefined) override.include_reasoning = include;
-        const response = await sendRequest(profileId, messages, maxTokens, override, args);
-        const raw = response?.content || response || '';
-        return String(context.parseReasoningFromString?.(raw)?.content ?? raw).trim();
+        const stripReasoning = text => String(context.parseReasoningFromString?.(text)?.content ?? text).trim();
+        let response = await sendRequest(profileId, messages, maxTokens, override);
+        let text = stripReasoning(response.content);
+        // The merge pass may be cut off by max_tokens. Ask the model to continue from where it
+        // stopped, up to merge_continuations times, appending each continuation verbatim.
+        const maxContinuations = isChunkPass ? 0 : Math.max(0, Number(settings.merge_continuations) || 0);
+        let rounds = 0;
+        while (response.finishReason === 'length' && rounds < maxContinuations && text) {
+            rounds++;
+            await setProgress({ phase: 'final', current: 1, total: 1, profile: getProfileName(profileId), note: `continuation ${rounds}/${maxContinuations}` });
+            const continuationMessages = [...messages, { role: 'assistant', content: text }, { role: 'user', content: CONTINUATION_PROMPT }];
+            await rateLimitSlot(profileId);
+            response = await sendRequest(profileId, continuationMessages, maxTokens, override);
+            const more = stripReasoning(response.content);
+            if (!more) break;
+            text = `${text}${/\s$/.test(text) || /^\s/.test(more) ? '' : ' '}${more}`;
+        }
+        if (response.finishReason === 'length') {
+            lastGenerationTruncated = true;
+            rawWarn(isChunkPass
+                ? 'A chunk digest was cut off by the output limit. Raise "Chunk max output tokens" in Summarization Connection.'
+                : `The summary was still cut off after ${rounds} continuation${rounds === 1 ? '' : 's'}. Review it before accepting, or raise "Merge max output tokens".`);
+        } else lastGenerationTruncated = false;
+        return text;
     } finally { internalGenerationDepth = Math.max(0, internalGenerationDepth - 1); }
 }
+
+/** True when the most recent generateFromText() result ended because of the output limit. */
+export function wasLastGenerationTruncated() { return lastGenerationTruncated; }
 
 export function getChunkTokenLimit(context = getContext()) {
     return Math.max(100, Number(context.maxContext || 4096) - 100);
@@ -796,7 +869,7 @@ async function summarizeHistory(segments, target, options = {}) {
     const chunkProfileName = getProfileName(resolveChunkProfileId(commandArgs?.chunkProfile ?? commandArgs?.profile));
     const mergeProfileName = getProfileName(resolveMergeProfileId(commandArgs?.profile));
     // Fingerprint of the segment layout: a checkpoint may only resume onto an identical plan.
-    const stockKey = ordered.map(item => item.type === 'stock' ? `s:${item.text.length}` : `f:${item.startId}`).join('|');
+    const stockKey = ordered.map(item => item.type === 'stock' ? `s:${fingerprint(item.text)}` : `f:${item.startId}-${item.endId}:${fingerprint(item.text)}`).join('|');
     const fresh = ordered.filter(item => item.type === 'fresh');
     const stockCount = ordered.length - fresh.length;
     const start = fresh[0]?.startId ?? 0;
@@ -847,11 +920,6 @@ async function summarizeHistory(segments, target, options = {}) {
     }
     await setProgress(null);
     result = String(result || '').trim();
-    if (result && totalPieces > 1 && piecesAreSummaries && settings.add_chunk_summaries && options.addChunkComment !== false) {
-        pendingChunkComments.set(target, combined);
-    } else {
-        pendingChunkComments.delete(target);
-    }
     return result;
 }
 
@@ -905,7 +973,6 @@ export async function acceptActiveSummaryReplacement(text, endMsgId) {
     await createChatBackup('active summary regeneration');
     rollingSummary = { ...rollingSummary, summary, updatedAt: new Date().toISOString() };
     regenerationBases.delete(target);
-    pendingChunkComments.delete(target);
     await saveData({ chat: true });
     await refreshViews();
     doneToast('Active summary regenerated.');
@@ -952,19 +1019,15 @@ export async function acceptRollingSummary(text, endMsgId, archiveOld = true) {
     chat[target].extra.rmr_chapter = true;
     if (settings.hide_chapter) {
         for (let index = oldEnd + 1; index <= target; index++) {
-            if (!chat[index]) continue;
+            if (!chat[index] || chat[index].is_system) continue; // already hidden (by us or by the user) -> leave ownership alone
             chat[index].is_system = true;
+            chat[index].extra ||= {};
+            chat[index].extra.fillTheTimeHidden = true;
             $(`.mes[mesid="${index}"]`).attr('is_system', 'true');
         }
     }
     await clearCheckpoint(target);
     // Stocked chunks are kept after a merge so a later regeneration can reuse them.
-    const chunkComment = pendingChunkComments.get(target);
-    if (chunkComment) {
-        try { await context.executeSlashCommandsWithOptions(`/comment at=${target + 1} <details class="rmr-summary-chunks"><summary>Chunk Summaries</summary>${chunkComment}</details>`); }
-        catch (error) { debug('Could not add accepted chunk-summary comment:', error); }
-    }
-    pendingChunkComments.delete(target);
     draftBases.delete(target);
     await saveData({ chat: true });
     await refreshViews();
@@ -1019,7 +1082,7 @@ export async function autoSplitSummarize(messageId, stages = 1, options = {}) {
             try { proposal = await generateRollingSummary(end, options); }
             catch (error) { errorToast(`Stage ${stage + 1} failed: ${error?.message || error}`); debug('Auto-split stage failed:', error); return false; }
             if (!proposal) { if (cuts.length > 1) warningToast(`Auto-split stopped at stage ${stage + 1}/${cuts.length}. Accepted stages were kept.`); return false; }
-            if (!isLast && options.autoAcceptIntermediate !== false) {
+            if (!isLast && options.autoAcceptIntermediate !== false && !lastGenerationTruncated) {
                 if (!await acceptRollingSummary(proposal, end, stage === 0 && settings.archive_on_accept)) { warningToast(`Could not accept stage ${stage + 1}. Stopping.`); return false; }
             } else {
                 const { openReviewPopup } = await import('./settings.js');
@@ -1131,6 +1194,11 @@ export async function endChapterSilent(messageOrId, options = {}) {
             return false;
         }
         if (!proposal) { warningToast('Background merge failed. Nothing was written.'); return false; }
+        if (lastGenerationTruncated) {
+            warningToast('Background merge produced a truncated summary. Opening it for review instead of applying it.');
+            const { openReviewPopup } = await import('./settings.js');
+            return await openReviewPopup(proposal, target);
+        }
         const accepted = await acceptRollingSummary(proposal, target, options.archiveOld ?? settings.archive_on_accept ?? true);
         if (!accepted) { errorToast('Background merge could not be applied. Nothing was written.'); return false; }
         doneToast(`Background merge complete (through message ${target}).`);

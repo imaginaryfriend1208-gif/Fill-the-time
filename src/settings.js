@@ -79,15 +79,15 @@ const CHARACTER_DIARY_PRESET = { id: 'preset-character-diary', name: "Character'
 const defaults = {
     is_enabled: true, show_buttons: [Buttons.STOP], memory_system_prompt: SYSTEM_PROMPT,
     memory_prompt_template: USER_PROMPT, rate_limit: 0, profile: null, hide_chapter: true,
-    add_chunk_summaries: false, use_chunk_summaries_as_chapter: false, archive_on_accept: true,
+    use_chunk_summaries_as_chapter: false, archive_on_accept: true,
     auto_accept_end: false, auto_stock_chunks: false, stock_profile: null, stock_context_limit: 0,
-    stock_during_merge: true,
-    chunk_system_prompt: CHUNK_SYSTEM_PROMPT, chunk_prompt_template: CHUNK_USER_PROMPT, use_custom_chunk_prompts: false,
+    merge_max_tokens: 0, chunk_max_tokens: 0, merge_continuations: 2,
+    chunk_system_prompt: CHUNK_SYSTEM_PROMPT, chunk_prompt_template: CHUNK_USER_PROMPT,
     summarize_presets: [DEFAULT_PRESET, WRITER_DIARY_PRESET, CHARACTER_DIARY_PRESET], current_summarize_preset: DEFAULT_PRESET.id,
     inject_enabled: false, inject_depth: 0, inject_role: extension_prompt_roles.SYSTEM,
     inject_prompt: INJECT_PROMPT, rolling_settings_migrated: true, locale_override: 'auto',
 };
-const obsolete = ['tools_enabled','quick_reply_buttons_location','quick_reply_buttons_enabled','loading_screen_enabled','chapter_query_system_prompt','chapter_query_prompt_template','timeline_fill_system_prompt','timeline_fill_prompt_template','query_chapter_limit','timeline_fill_query_limit','query_profile','timeline_fill_profile','query_presets','current_query_preset','timeline_fill_presets','current_timeline_fill_preset','agentic_timeline_fill_enabled','agentic_timeline_fill_profile','agentic_timeline_fill_prompt','chapter_end_mode','scene_end_mode','hide_scene','merge_use_stock','merge_ignore_previous','use_archive_as_regen_base'];
+const obsolete = ['tools_enabled','quick_reply_buttons_location','quick_reply_buttons_enabled','loading_screen_enabled','chapter_query_system_prompt','chapter_query_prompt_template','timeline_fill_system_prompt','timeline_fill_prompt_template','query_chapter_limit','timeline_fill_query_limit','query_profile','timeline_fill_profile','query_presets','current_query_preset','timeline_fill_presets','current_timeline_fill_preset','agentic_timeline_fill_enabled','agentic_timeline_fill_profile','agentic_timeline_fill_prompt','chapter_end_mode','scene_end_mode','hide_scene','merge_use_stock','merge_ignore_previous','use_archive_as_regen_base','stock_during_merge','use_custom_chunk_prompts','add_chunk_summaries'];
 const clone = value => JSON.parse(JSON.stringify(value));
 const escapeHtml = text => $('<div>').text(String(text ?? '')).html();
 const save = () => getContext().saveSettingsDebounced();
@@ -183,7 +183,7 @@ async function loadUI() {
     $('#rmr_chunk_prompt_template').val(settings.chunk_prompt_template).attr('placeholder', CHUNK_USER_PROMPT);
     $('#rmr_inject_prompt').val(settings.inject_prompt).attr('placeholder', INJECT_PROMPT);
     $('#rmr_chapter_button').prop('checked', settings.show_buttons.includes(Buttons.STOP)).off('change').on('change', function () { settings.show_buttons = this.checked ? [Buttons.STOP] : []; save(); resetMessageButtons(); });
-    for (const key of ['hide_chapter','add_chunk_summaries','use_chunk_summaries_as_chapter','archive_on_accept','auto_accept_end','stock_during_merge']) $(`#rmr_${key}`).prop('checked', !!settings[key]).off('change').on('change', function () { settings[key] = this.checked; save(); });
+    for (const key of ['hide_chapter','use_chunk_summaries_as_chapter','archive_on_accept','auto_accept_end']) $(`#rmr_${key}`).prop('checked', !!settings[key]).off('change').on('change', function () { settings[key] = this.checked; save(); });
     $('#rmr_auto_stock_chunks').prop('checked', !!settings.auto_stock_chunks).off('change').on('change', async function () {
         settings.auto_stock_chunks = this.checked; save();
         if (this.checked) { const { autoStockChunks } = await import('./memories.js'); autoStockChunks({ verbose: true }); }
@@ -214,6 +214,9 @@ async function loadUI() {
         } finally { button.prop('disabled', false); }
     });
     $('#rmr_rate_limit').val(settings.rate_limit).off('change').on('change', function () { settings.rate_limit = Math.max(0, Number(this.value) || 0); this.value = settings.rate_limit; save(); });
+    for (const [id, key] of [['#rmr_merge_max_tokens', 'merge_max_tokens'], ['#rmr_chunk_max_tokens', 'chunk_max_tokens'], ['#rmr_merge_continuations', 'merge_continuations']]) {
+        $(id).val(settings[key] || (key === 'merge_continuations' ? 0 : '')).off('change').on('change', function () { settings[key] = Math.max(0, Math.floor(Number(this.value) || 0)); this.value = settings[key] || (key === 'merge_continuations' ? 0 : ''); save(); });
+    }
     populateProfiles(); $('#rmr_profile').off('change').on('change', function () { settings.profile = this.value || null; save(); });
     $('#rmr_stock_profile').off('change').on('change', function () { settings.stock_profile = this.value || null; save(); });
     $('#rmr_stock_context_limit').val(settings.stock_context_limit || '').off('change').on('change', function () { settings.stock_context_limit = Math.max(0, Number(this.value) || 0); this.value = settings.stock_context_limit || ''; save(); renderStockStatus(); });
@@ -227,9 +230,6 @@ async function loadUI() {
     $('#rmr_memory_prompt_template').off('change').on('change', function () { settings.memory_prompt_template = this.value || USER_PROMPT; save(); presetUI(); });
     $('#rmr_chunk_system_prompt').off('change').on('change', function () { settings.chunk_system_prompt = this.value || CHUNK_SYSTEM_PROMPT; save(); });
     $('#rmr_chunk_prompt_template').off('change').on('change', function () { settings.chunk_prompt_template = this.value || CHUNK_USER_PROMPT; save(); });
-    const syncChunkFields = () => $('#rmr_chunk_prompt_fields').toggle(!!settings.use_custom_chunk_prompts);
-    $('#rmr_use_custom_chunk_prompts').prop('checked', !!settings.use_custom_chunk_prompts).off('change').on('change', function () { settings.use_custom_chunk_prompts = this.checked; save(); syncChunkFields(); });
-    syncChunkFields();
     $('#rmr_create_chapter').off('click').on('click', async function () {
         const button = $(this);
         if (button.prop('disabled')) return;

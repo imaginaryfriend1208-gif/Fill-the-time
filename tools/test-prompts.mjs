@@ -45,9 +45,9 @@ function extractFunction(name) {
 
 let generateBody = extractFunction('generateFromText');
 const injectBody = extractFunction('updateSummaryInjection');
-const callSite = 'const response = await sendRequest(profileId, messages, maxTokens, override, args);';
+const callSite = 'let response = await sendRequest(profileId, messages, maxTokens, override);';
 if (!generateBody.includes(callSite)) throw new Error('sendRequest call site changed; update this test');
-generateBody = generateBody.replace(callSite, 'const response = { content: JSON.stringify({ messages, profileId }) };');
+generateBody = generateBody.replace(callSite, 'let response = { content: JSON.stringify({ messages, profileId }), finishReason: \'stop\' };');
 // Structural markers only. Anything tied to how macros are substituted would make this
 // guard fail whenever that implementation legitimately changes.
 for (const marker of ['isChunkPass', 'userPrompt', 'systemPrompt', 'messages.push({ role:']) {
@@ -75,6 +75,11 @@ const moduleSource = [
     "const resolveChunkProfileId = () => 'CHUNK_PROFILE';",
     "const resolveMergeProfileId = () => 'MERGE_PROFILE';",
     'const rateLimitSlot = async () => {};',
+    'const setProgress = async () => {};',
+    'const rawWarn = () => {};',
+    'let lastGenerationTruncated = false;',
+    "const CONTINUATION_PROMPT = 'continue';",
+    "const getProfileName = () => 'P';",
     'const getMaxTokensForProfile = async () => 1024;',
     'const buildOverridePayload = () => ({});',
     'const getReasoningEffort = () => undefined;',
@@ -137,12 +142,12 @@ const eq = (name, actual, expected) => assert(name, actual === expected, `${JSON
 
 console.log('\n-- which prompt / which profile --');
 let r = await send({ includePrevious: false, settings: { use_custom_chunk_prompts: true } });
-eq('chunk pass, separate chunk prompts ON -> chunk user prompt', r.user, 'CUSR content=[BODY]');
-eq('chunk pass, separate chunk prompts ON -> chunk system prompt', r.system, 'CSYS');
+eq('chunk pass -> chunk user prompt', r.user, 'CUSR content=[BODY]');
+eq('chunk pass -> chunk system prompt', r.system, 'CSYS');
 eq('chunk pass -> chunk profile', r.profileId, 'CHUNK_PROFILE');
 
 r = await send({ includePrevious: false, settings: { use_custom_chunk_prompts: false }, active: 'OLD' });
-eq('chunk pass, toggle OFF -> merge prompt with an empty previousSummary', r.user, 'MUSR prev=[] content=[BODY]');
+eq('chunk pass ignores the removed toggle and still uses the chunk prompt', r.user, 'CUSR content=[BODY]');
 
 r = await send({ includePrevious: true, active: 'OLD', settings: { use_custom_chunk_prompts: true } });
 eq('merge pass -> merge prompt even while the chunk toggle is on', r.user, 'MUSR prev=[OLD] content=[BODY]');

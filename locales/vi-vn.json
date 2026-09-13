@@ -38,12 +38,10 @@
   "rmr_merge_prompts": "Prompt Merge (bản tóm tắt cuộn cuối)",
   "rmr_merge_prompts_hint": "Gộp bản tóm tắt trước với sự kiện mới thành chapter hoàn chỉnh. Macro: {{previousSummary}}, {{content}}, {{worldInfo}} (entry constant của lorebook) và macro thẻ nhân vật như {{description}}, {{personality}}, {{mesExamples}}.",
   "rmr_chunk_prompts": "Prompt Chunk (tóm tắt từng chunk & stock)",
-  "rmr_chunk_prompts_hint": "Nén từng chunk (kể cả stock chạy ngầm) trước khi merge. Khi tắt, dùng Prompt Merge với {{previousSummary}} rỗng. Macro: {{content}}, {{worldInfo}}.",
-  "rmr_use_custom_chunk_prompts": "Dùng prompt chunk riêng",
+  "rmr_chunk_prompts_hint": "Nén từng chunk (kể cả stock chạy ngầm) trước khi merge. Luôn dùng cho pass chunk. Macro: {{content}}, {{worldInfo}}.",
   "rmr_summary_behavior": "Hành vi tóm tắt",
   "rmr_hide_chapter": "Ẩn tin nhắn sau khi chấp nhận bản tóm tắt",
   "rmr_archive_on_accept": "Mặc định lưu trữ bản tóm tắt trước",
-  "rmr_add_chunk_summaries": "Thêm tóm tắt từng phần dưới dạng bình luận",
   "rmr_use_chunk_summaries": "Dùng trực tiếp tóm tắt từng phần làm bản cuối",
   "rmr_inject_heading": "Tùy chọn chèn theo độ sâu",
   "rmr_inject_hint": "Thông thường hãy đặt {{fillthetime}} trong Prompt Manager. Chỉ bật tùy chọn này nếu muốn chèn tự động.",
@@ -155,5 +153,7 @@
   "rmr_drop_archive": "Xoá luôn archive của chat này",
   "rmr_restore_latest": "Khôi phục bản mới nhất",
   "rmr_create_empty": "Tạo bản trống",
-  "rmr_stock_during_merge": "Vẫn stock trong lúc đang tạo summary (chỉ các tin phía sau)"
+  "rmr_merge_max_tokens": "Số token output tối đa khi merge (0 = theo Response Length của preset)",
+  "rmr_chunk_max_tokens": "Số token output tối đa khi chunk (0 = theo Response Length của preset)",
+  "rmr_merge_continuations": "Tự nối tiếp merge bị cắt tối đa N lần"
 }

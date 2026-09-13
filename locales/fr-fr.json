@@ -38,12 +38,10 @@
   "rmr_merge_prompts": "Prompt de fusion (résumé cumulatif final)",
   "rmr_merge_prompts_hint": "Fusionne le résumé précédent avec les nouveaux événements en un chapitre final. Macros : {{previousSummary}}, {{content}}, {{worldInfo}} (entrées constantes du lorebook) et les macros de fiche comme {{description}}, {{personality}}, {{mesExamples}}.",
   "rmr_chunk_prompts": "Prompt de segment (condensés par segment et stockage)",
-  "rmr_chunk_prompts_hint": "Condense chaque segment (y compris le stockage en arrière-plan) avant la fusion. Désactivé, le prompt de fusion est utilisé avec {{previousSummary}} vide. Macros : {{content}}, {{worldInfo}}.",
-  "rmr_use_custom_chunk_prompts": "Utiliser des prompts de segment distincts",
+  "rmr_chunk_prompts_hint": "Condense chaque chunk (y compris le stock en arrière-plan) avant la fusion. Toujours utilisé pour les passes chunk. Macros : {{content}}, {{worldInfo}}.",
   "rmr_summary_behavior": "Comportement du résumé",
   "rmr_hide_chapter": "Masquer les messages après acceptation de leur résumé",
   "rmr_archive_on_accept": "Archiver le résumé précédent par défaut",
-  "rmr_add_chunk_summaries": "Ajouter les résumés de segments comme commentaire",
   "rmr_use_chunk_summaries": "Utiliser directement les résumés de segments comme résumé final",
   "rmr_inject_heading": "Injection facultative en profondeur",
   "rmr_inject_hint": "Placez normalement {{fillthetime}} dans Prompt Manager. Activez ceci seulement pour une injection automatique.",
@@ -155,5 +153,7 @@
   "rmr_drop_archive": "Supprimer aussi l'archive de ce chat",
   "rmr_restore_latest": "Restaurer la dernière",
   "rmr_create_empty": "Créer un résumé vide",
-  "rmr_stock_during_merge": "Continuer le stockage pendant la génération (messages au-delà uniquement)"
+  "rmr_merge_max_tokens": "Tokens de sortie max pour la fusion (0 = Response Length du preset)",
+  "rmr_chunk_max_tokens": "Tokens de sortie max par chunk (0 = Response Length du preset)",
+  "rmr_merge_continuations": "Poursuivre une fusion tronquée jusqu’à N fois"
 }

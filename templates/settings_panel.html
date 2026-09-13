@@ -71,7 +71,6 @@ Token budget: limits how many tokens the meter shows (0 = model context)." data-
                         </div>
                     </div>
                     <label class="checkbox_label" for="rmr_auto_stock_chunks"><input id="rmr_auto_stock_chunks" class="checkbox" type="checkbox"><span data-i18n="rmr_auto_stock_chunks">Auto-stock chunk summaries in the background</span></label>
-                    <label class="checkbox_label" for="rmr_stock_during_merge"><input id="rmr_stock_during_merge" class="checkbox" type="checkbox"><span data-i18n="rmr_stock_during_merge">Keep stocking while a summary is generating (only messages past it)</span></label>
                     <label class=\"checkbox_label\" for=\"rmr_auto_accept_end\"><input id=\"rmr_auto_accept_end\" class=\"checkbox\" type=\"checkbox\"><span data-i18n=\"rmr_auto_accept_end\">Silent background merge (auto-accept, read-back popup when done)</span></label>
                     <div class="rmr-chunk-size-row">
                         <label for="rmr_stock_context_limit"><small data-i18n="rmr_stock_context_limit">Token budget for the meter below (0 = model context), e.g. 100000</small></label>
@@ -107,6 +106,11 @@ Token budget: limits how many tokens the meter shows (0 = model context)." data-
                 <div class="flexFlowColumn rmr-field"><label for="rmr_stock_profile"><small data-i18n="rmr_chunk_profile">Chunk Profile (chunk digests + stocking; blank = same as merge)</small></label><select class="text_pole" id="rmr_stock_profile"><option value="" data-i18n="rmr_no_override">-- No Override --</option></select></div>
                 <div class="flexFlowColumn rmr-field"><label for="rmr_rate_limit"><small data-i18n="rmr_rate_limit">Max Requests per Minute (0 = unlimited)</small></label><input class="text_pole" id="rmr_rate_limit" type="number" min="0"></div>
             </div>
+            <div class="rmr-extension_block flex-container marginTopBot5 rmr-connection-row rmr-field-row">
+                <div class="flexFlowColumn rmr-field"><label for="rmr_merge_max_tokens"><small data-i18n="rmr_merge_max_tokens">Merge max output tokens (0 = preset Response Length)</small></label><input class="text_pole" id="rmr_merge_max_tokens" type="number" min="0" step="256" placeholder="preset"></div>
+                <div class="flexFlowColumn rmr-field"><label for="rmr_chunk_max_tokens"><small data-i18n="rmr_chunk_max_tokens">Chunk max output tokens (0 = preset Response Length)</small></label><input class="text_pole" id="rmr_chunk_max_tokens" type="number" min="0" step="256" placeholder="preset"></div>
+                <div class="flexFlowColumn rmr-field"><label for="rmr_merge_continuations"><small data-i18n="rmr_merge_continuations">Continue a cut-off merge up to N times</small></label><input class="text_pole" id="rmr_merge_continuations" type="number" min="0" max="5"></div>
+            </div>
             <hr>
 
             <h4 data-i18n="rmr_summarization_preset">Summarization Preset<span class="rmr-info-icon" data-tip="Save, update, delete, export, or import prompt presets. A preset stores the System + User prompts used for summarization. Edit prompts below, then Save New." data-i18n-tip="rmr_info_preset"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6.7"/><path d="M8 7.2v4" stroke-linecap="round"/><circle cx="8" cy="4.9" r=".85" fill="currentColor" stroke="none"/></svg></span></h4>
@@ -140,9 +144,8 @@ Token budget: limits how many tokens the meter shows (0 = model context)." data-
                     <div class="rmr-prompt-card-header">
                         <i class="fa-solid fa-cubes"></i>
                         <span data-i18n="rmr_chunk_prompts">Chunk Prompt (per-chunk digests &amp; stocking)</span>
-                        <label class="checkbox_label rmr-prompt-card-toggle" for="rmr_use_custom_chunk_prompts"><input id="rmr_use_custom_chunk_prompts" class="checkbox" type="checkbox"><span data-i18n="rmr_use_custom_chunk_prompts">Use separate chunk prompts</span></label>
                     </div>
-                    <p class="rmr-prompt-card-hint"><small data-i18n="rmr_chunk_prompts_hint">Condenses each chunk (including background stocking) before the merge. When off, the Merge Prompt is used with an empty {{previousSummary}}. Macros: {{content}}, {{worldInfo}}.</small></p>
+                    <p class="rmr-prompt-card-hint"><small data-i18n="rmr_chunk_prompts_hint">Condenses each chunk (including background stocking) before the merge. Always used for chunk passes. Macros: {{content}}, {{worldInfo}}.</small></p>
                     <div id="rmr_chunk_prompt_fields">
                         <label for="rmr_chunk_system_prompt"><small data-i18n="rmr_system_prompt">System Prompt</small></label>
                         <textarea rows="4" class="margin0 text_pole textarea_compact" id="rmr_chunk_system_prompt"></textarea>
@@ -160,7 +163,6 @@ Use chunks directly: skip the merge pass and concatenate chunk digests as the fi
             <div class="rmr-extension_block">
                 <label class="checkbox_label" for="rmr_hide_chapter"><input id="rmr_hide_chapter" class="checkbox" type="checkbox"><span data-i18n="rmr_hide_chapter">Hide messages after accepting their summary</span></label>
                 <label class="checkbox_label" for="rmr_archive_on_accept"><input id="rmr_archive_on_accept" class="checkbox" type="checkbox"><span data-i18n="rmr_archive_on_accept">Archive the previous summary by default</span></label>
-                <label class="checkbox_label" for="rmr_add_chunk_summaries"><input id="rmr_add_chunk_summaries" class="checkbox" type="checkbox"><span data-i18n="rmr_add_chunk_summaries">Add chunk summaries as a chat comment</span></label>
                 <label class="checkbox_label" for="rmr_use_chunk_summaries_as_chapter"><input id="rmr_use_chunk_summaries_as_chapter" class="checkbox" type="checkbox"><span data-i18n="rmr_use_chunk_summaries">Use chunk summaries directly as final summary</span></label>
             </div>
             <hr>
