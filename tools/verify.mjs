@@ -77,6 +77,13 @@ check('stock-state', 'chunk selector does not reference archive state',
 check('stock-state', 'stock-state executable test has at least 20 assertions',
     existsSync(join(root, 'tools/test-stock-state.mjs')) && (read('tools/test-stock-state.mjs').match(/check\(/g) || []).length >= 20);
 
+// ---------------------------------------------------------------- notify
+check('notify', 'central notifier exists', existsSync(join(root, 'src/notify.js')));
+const notifyJs = existsSync(join(root, 'src/notify.js')) ? read('src/notify.js') : '';
+check('notify', 'memories never calls toastr directly', !/toastr\./.test(memories));
+check('notify', 'progress lanes replace prior live toast', /active\.get\(lane\)/.test(notifyJs) && /clear\(lane\)/.test(notifyJs));
+check('notify', 'per-chunk generating toast is removed', !/Generating chunk summary/.test(memories));
+
 // ---------------------------------------------------------------- exports
 const PUBLIC_EXPORTS = [
     'getRollingSummary', 'getArchiveEntries', 'getStockedChunks', 'loadRollingSummaryData',

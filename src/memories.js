@@ -5,6 +5,7 @@ import { settings } from './settings.js';
 import { debug } from './logging.js';
 import { selectChunksForMerge } from './chunk-select.js';
 import { emptyChunk } from './summary-state.js';
+import { notify } from './notify.js';
 import { ConnectionManagerRequestService } from '../../../shared.js';
 import { amount_gen, main_api, setExtensionPrompt, extension_prompt_types, extension_prompt_roles, eventSource, event_types } from '../../../../../script.js';
 import { oai_settings, openai_settings, chat_completion_sources, reasoning_effort_types } from '../../../../../scripts/openai.js';
@@ -46,17 +47,17 @@ async function setProgress(state) {
     } catch (error) { debug('Could not update chapter progress UI:', error); }
 }
 
-const infoToast = text => { if (!commandArgs?.quiet) toastr.info(text, 'IF Memory'); };
-const doneToast = text => { if (!commandArgs?.quiet) toastr.success(text, 'IF Memory'); };
-const warningToast = text => { if (!commandArgs?.quiet) toastr.warning(text, 'IF Memory'); };
-const errorToast = text => { if (!commandArgs?.quiet) toastr.error(text, 'IF Memory'); };
+const infoToast = text => { if (!commandArgs?.quiet) notify.progress('merge', text); };
+const doneToast = text => { if (!commandArgs?.quiet) notify.done('merge', text); };
+const warningToast = text => { if (!commandArgs?.quiet) notify.error('merge', text); };
+const errorToast = text => { if (!commandArgs?.quiet) notify.error('merge', text); };
 const clone = value => value == null ? value : JSON.parse(JSON.stringify(value));
 // Unconditional toasts. Background stocking owns its own verbosity and must never read the
 // global commandArgs, which may belong to a merge running concurrently.
-const rawInfo = text => toastr.info(text, 'IF Memory');
-const rawDone = text => toastr.success(text, 'IF Memory');
-const rawWarn = text => toastr.warning(text, 'IF Memory');
-const rawError = text => toastr.error(text, 'IF Memory');
+const rawInfo = text => notify.progress('stock', text);
+const rawDone = text => notify.done('stock', text);
+const rawWarn = text => notify.error('stock', text);
+const rawError = text => notify.error('stock', text);
 
 /** Highest message id currently claimed by an in-flight merge, or -1 when idle. */
 function mergeFloor() { return Number.isInteger(activeMergeTarget) ? activeMergeTarget : -1; }
@@ -712,7 +713,6 @@ async function generateFromText(content, chunk = 0, includePrevious = true, prev
         ? resolveChunkProfileId(args?.chunkProfile ?? args?.profile)
         : resolveMergeProfileId(args?.profile);
     await rateLimitSlot(profileId);
-    if (chunk && !args?.quiet) rawInfo(`Generating chunk summary ${chunk}...`);
     internalGenerationDepth++;
     try {
         const context = getContext();
@@ -1187,8 +1187,8 @@ function showMergeDonePopup(text, endMsgId) {
     wrap.querySelector('[data-act=x]').onclick = close;
     wrap.querySelector('[data-act=close]').onclick = close;
     wrap.querySelector('[data-act="copy"]').onclick = async () => {
-        try { await navigator.clipboard.writeText(body.value); toastr.success('Summary copied.', 'IF Memory'); }
-        catch { toastr.error('Copy failed.', 'IF Memory'); }
+        try { await navigator.clipboard.writeText(body.value); notify.done('merge', 'Summary copied.'); }
+        catch { notify.error('merge', 'Copy failed.'); }
     };
     wrap.addEventListener('mousedown', (event) => { if (event.target === wrap) close(); });
     document.body.appendChild(wrap);
