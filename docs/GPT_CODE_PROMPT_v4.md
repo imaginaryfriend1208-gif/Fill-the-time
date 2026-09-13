@@ -6,6 +6,29 @@
 
 ---
 
+## TIẾN ĐỘ TRIỂN KHAI (cập nhật 2026-09-13)
+
+> Đây là trạng thái thực tế để tiếp tục công việc, không phải mô tả kế hoạch.
+
+| Giai đoạn | Trạng thái | Commit | Ghi chú kiểm chứng |
+|---|---|---|---|
+| G1 | **HOÀN TẤT LOCAL** | `5c0abd8` | Đã thêm `src/chunk-select.js`, `src/summary-state.js`, `tools/test-stock-state.mjs`; 30 assertion stock-state pass. |
+| G2 | **HOÀN TẤT LOCAL** | `a14b988` | Đã cắt archive khỏi regenerate/merge, thêm accessor active summary, alias `{{previous_summary}}`, bỏ các lựa chọn obsolete theo G2. Toàn bộ gate local pass. |
+| G3 | **HOÀN TẤT LOCAL** | `3a5e78b` | Tombstone giữ nguyên mảng, 4 trạng thái derive, merge chặn chunk rỗng, purge riêng, Clear giữ stock; 36 assertion stock-state pass. |
+| G4 | **HOÀN TẤT LOCAL** | `7ebba4a` | Đã thêm notifier tập trung với lane merge/stock, loại toast per-chunk; nhóm gate `notify` và toàn bộ gate local pass. |
+| G5 | **CHƯA LÀM** | — | Chưa tách profile lỗi rõ ràng và chưa bỏ fallback API ngầm. |
+| G6 | **CHƯA LÀM** | — | Chưa làm `merge_max_tokens` và phát hiện truncated response. |
+| G7 | **CHƯA LÀM** | — | Chưa hoàn tất migration/UI/i18n/version/docs và clone verification cuối. |
+
+### Trạng thái gate và blocker
+
+- Gate local sau G1 và G2: **xanh** (`verify.mjs`, `test-prompts.mjs`, `test-stock-state.mjs`, syntax JS/JSON và `git diff --check`).
+- **Không có blocker kỹ thuật đang biết**; G5–G7 là chưa triển khai, không phải bị kẹt.
+- Nhánh local hiện có các commit G1–G4 nhưng **chưa push** và **chưa chạy gate trên fresh clone sau push**.
+- Báo cáo tracking được commit riêng sau G4 để không trộn thay đổi tài liệu vào commit kỹ thuật từng giai đoạn.
+
+---
+
 ## PHẦN 0 — Kết quả nghiên cứu (đọc trước khi code)
 
 ### Đã kiểm chứng bằng thực thi (không phải đọc)
