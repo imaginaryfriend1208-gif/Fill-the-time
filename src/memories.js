@@ -328,9 +328,14 @@ export function updateSummaryInjection() {
     }
     const context = getContext();
     let prompt = String(settings.inject_prompt || '');
-    prompt = prompt.replace(/{{fillthetime}}/gi, rollingSummary?.summary || '');
-    prompt = prompt.replace(/{{lastMessageId}}/gi, String(Math.max(0, (context.chat || []).length - 1)));
-    prompt = prompt.replace(/{{firstIncludedMessageId}}/gi, String(rollingSummary ? rollingSummary.endMsgId + 1 : 0));
+    // Same single-pass callback rule as the summarization prompts: a summary containing $&
+    // must survive, and an id must not be rescanned for further macros.
+    const injected = {
+        fillthetime: rollingSummary?.summary || '',
+        lastmessageid: String(Math.max(0, (context.chat || []).length - 1)),
+        firstincludedmessageid: String(rollingSummary ? rollingSummary.endMsgId + 1 : 0),
+    };
+    prompt = prompt.replace(/{{(fillthetime|lastMessageId|firstIncludedMessageId)}}/gi, (match, key) => injected[key.toLowerCase()] ?? match);
     prompt = context.substituteParams(prompt, context.name1, context.name2);
     setExtensionPrompt(INJECT_KEY, prompt, extension_prompt_types.IN_CHAT, Number(settings.inject_depth) || 0, false, settings.inject_role ?? extension_prompt_roles.SYSTEM, () => internalGenerationDepth === 0);
 }
@@ -679,11 +684,6 @@ export async function getWorldInfoText() {
     return worldInfoCache;
 }
 
-async function substituteWorldInfo(text) {
-    if (!/{{worldinfo}}/i.test(text)) return text;
-    return text.replace(/{{worldinfo}}/gi, await getWorldInfoText());
-}
-
 async function generateFromText(content, chunk = 0, includePrevious = true, previousOverride = null, job = null) {
     // `job` overrides the global commandArgs. Background stocking always passes its own, so a
     // merge running at the same time cannot have its profile or quiet flag swapped underneath it.
@@ -702,10 +702,23 @@ async function generateFromText(content, chunk = 0, includePrevious = true, prev
         const useChunkPrompts = isChunkPass && settings.use_custom_chunk_prompts;
         const userTemplate = useChunkPrompts ? settings.chunk_prompt_template : settings.memory_prompt_template;
         const systemTemplate = useChunkPrompts ? settings.chunk_system_prompt : settings.memory_system_prompt;
-        let userPrompt = String(userTemplate || '').replace(/{{content}}/gi, String(content || '').trim()).replace(/{{previousSummary}}/gi, previous);
-        let systemPrompt = String(systemTemplate || '').replace(/{{content}}/gi, String(content || '').trim()).replace(/{{previousSummary}}/gi, previous);
-        userPrompt = await substituteWorldInfo(userPrompt);
-        systemPrompt = await substituteWorldInfo(systemPrompt);
+        // One pass, callback form, for two separate reasons:
+        //   1. String.replace() reads $&, $` , $' and $1 in a *replacement string* as directives,
+        //      so chat text or a summary containing them was silently rewritten.
+        //   2. Chaining replaces rescans text that was just inserted, so a message containing
+        //      the literal {{previousSummary}} or {{worldinfo}} had it expanded as if it were
+        //      part of the template.
+        // A callback is never parsed for $-directives, and a single pass never revisits its own output.
+        const contentText = String(content || '').trim();
+        const needsWorldInfo = /{{worldinfo}}/i.test(`${userTemplate || ''}${systemTemplate || ''}`);
+        const macros = {
+            content: contentText,
+            previoussummary: previous,
+            worldinfo: needsWorldInfo ? await getWorldInfoText() : '',
+        };
+        const fillMacros = template => String(template || '').replace(/{{(content|previousSummary|worldInfo)}}/gi, (match, key) => macros[key.toLowerCase()] ?? match);
+        let userPrompt = fillMacros(userTemplate);
+        let systemPrompt = fillMacros(systemTemplate);
         userPrompt = context.substituteParams(userPrompt, context.name1, context.name2);
         systemPrompt = context.substituteParams(systemPrompt, context.name1, context.name2);
         const messages = [];

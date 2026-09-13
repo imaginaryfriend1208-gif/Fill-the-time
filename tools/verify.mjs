@@ -212,6 +212,30 @@ check('concurrency', 'stocking toasts bypass the shared quiet flag',
 check('concurrency', 'concurrency can be turned off',
     /stock_during_merge/.test(memories) && /stock_during_merge/.test(settingsJs) && /rmr_stock_during_merge/.test(html));
 
+// -------------------------------------------------- prompt substitution
+check('prompt-substitution', 'summarization macros are filled in one pass via a callback',
+    memories.includes('{{(content|previousSummary|worldInfo)}}/gi, (match, key)') && memories.includes('const fillMacros ='),
+    'chained replaces rescan inserted text and reinterpret $-directives inside it');
+check('prompt-substitution', 'injection macros are filled in one pass via a callback',
+    memories.includes('{{(fillthetime|lastMessageId|firstIncludedMessageId)}}/gi, (match, key)'));
+for (const [macro, snippet] of [
+    ['{{content}}', 'replace(/{{content}}/gi,'],
+    ['{{previousSummary}}', 'replace(/{{previousSummary}}/gi,'],
+    ['{{worldinfo}}', 'replace(/{{worldinfo}}/gi,'],
+    ['{{fillthetime}}', 'replace(/{{fillthetime}}/gi,'],
+]) {
+    check('prompt-substitution', `no string-form replacement left for ${macro}`, !memories.includes(snippet),
+        'a value containing $& or $` would be treated as a replacement directive');
+}
+check('prompt-substitution', 'world info is only fetched when a template asks for it',
+    memories.includes('needsWorldInfo ? await getWorldInfoText() :'),
+    'the old helper short-circuited; the single pass must keep that');
+check('prompt-substitution', 'the superseded two-step world info helper is gone',
+    !memories.includes('substituteWorldInfo'));
+check('prompt-substitution', 'the executable prompt test ships with the extension',
+    existsSync(join(root, 'tools/test-prompts.mjs')),
+    'static checks cannot prove what the model actually receives');
+
 // ---------------------------------------------------------------- i18n
 const REQUIRED_KEYS = [
     'rmr_merge_profile', 'rmr_chunk_profile', 'rmr_merge_use_stock', 'rmr_merge_ignore_previous',
