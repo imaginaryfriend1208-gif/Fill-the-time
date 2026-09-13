@@ -3,6 +3,8 @@ import { MacrosParser } from '../../../../macros.js';
 import { getRegexedString, regex_placement } from '../../../regex/engine.js';
 import { settings } from './settings.js';
 import { debug } from './logging.js';
+import { selectChunksForMerge } from './chunk-select.js';
+import { emptyChunk } from './summary-state.js';
 import { ConnectionManagerRequestService } from '../../../shared.js';
 import { amount_gen, main_api, setExtensionPrompt, extension_prompt_types, extension_prompt_roles, eventSource, event_types } from '../../../../../script.js';
 import { oai_settings, openai_settings, chat_completion_sources, reasoning_effort_types } from '../../../../../scripts/openai.js';
@@ -58,6 +60,7 @@ const rawError = text => toastr.error(text, 'IF Memory');
 
 /** Highest message id currently claimed by an in-flight merge, or -1 when idle. */
 function mergeFloor() { return Number.isInteger(activeMergeTarget) ? activeMergeTarget : -1; }
+export function getMergeFloor() { return mergeFloor(); }
 function beginMerge(target) {
     const value = Number(target);
     activeMergeTarget = Number.isInteger(value) ? value : null;
@@ -293,7 +296,7 @@ export async function restorePreviousFromArchive() {
  * so by default they are removed too: otherwise the next merge silently re-uses them
  * (they turn from "merged" into "pending" the moment the active summary is gone).
  */
-export async function clearRollingSummary({ dropMergedStock = true, dropAllStock = false, dropArchive = false } = {}) {
+export async function clearRollingSummary({ dropArchive = false } = {}) {
     const oldEnd = rollingSummary?.endMsgId;
     rollingSummary = null;
     draftBases.clear();
@@ -302,16 +305,10 @@ export async function clearRollingSummary({ dropMergedStock = true, dropAllStock
     clearMarkers();
     if (Number.isInteger(oldEnd)) unhideRange(0, oldEnd);
     await clearCheckpoint();
-    let removedStock = 0;
-    if (dropAllStock) { removedStock = stockedChunks.length; await clearStockedChunks(); }
-    else if (dropMergedStock && Number.isInteger(oldEnd)) removedStock = await clearMergedStockedChunks(oldEnd);
-    if (dropArchive && archiveEntries.length) { archiveEntries = []; }
+    if (dropArchive && archiveEntries.length) archiveEntries = [];
     await saveData({ chat: true });
     await refreshViews();
-    const extra = [];
-    if (removedStock) extra.push(`${removedStock} stocked ${removedStock === 1 ? 'chunk' : 'chunks'} removed`);
-    if (dropArchive) extra.push('archive cleared');
-    doneToast(`Created an empty summary. You can summarize the chat again.${extra.length ? ` (${extra.join(', ')})` : ''}`);
+    doneToast(`Created an empty summary. Stocked chunks were kept so the chat can be summarized again.${dropArchive ? ' (archive cleared)' : ''}`);
     return true;
 }
 
@@ -431,8 +428,10 @@ function normalizeStockEntry(value) {
     const summary = String(value.summary || '').trim();
     const fromMsgId = Number(value.fromMsgId);
     const toMsgId = Number(value.toMsgId);
-    if (!summary || !Number.isInteger(fromMsgId) || !Number.isInteger(toMsgId) || fromMsgId < 0 || toMsgId < fromMsgId) return null;
-    return { summary, fromMsgId, toMsgId, createdAt: typeof value.createdAt === 'string' ? value.createdAt : new Date().toISOString() };
+    if (!Number.isInteger(fromMsgId) || !Number.isInteger(toMsgId) || fromMsgId < 0 || toMsgId < fromMsgId) return null;
+    const entry = { summary, fromMsgId, toMsgId, createdAt: typeof value.createdAt === 'string' ? value.createdAt : new Date().toISOString() };
+    if (!summary && typeof value.emptiedAt === 'string') entry.emptiedAt = value.emptiedAt;
+    return entry;
 }
 
 async function saveStock() {
@@ -450,9 +449,14 @@ export function isStocking() { return Boolean(stockInProgress); }
 export async function invalidateStockFrom(messageId) {
     const id = Number(messageId);
     if (!Number.isInteger(id) || !stockedChunks.length) return;
-    const before = stockedChunks.length;
-    stockedChunks = stockedChunks.filter(entry => entry.toMsgId < id);
-    if (stockedChunks.length !== before) { debug(`Invalidated ${before - stockedChunks.length} stocked chunks from message ${id}.`); await saveStock(); }
+    const emptiedAt = new Date().toISOString();
+    let invalidated = 0;
+    stockedChunks = stockedChunks.map(entry => {
+        if (entry.toMsgId < id || !entry.summary) return entry;
+        invalidated++;
+        return emptyChunk(entry, emptiedAt);
+    });
+    if (invalidated) { debug(`Invalidated ${invalidated} stocked chunks from message ${id}.`); await saveStock(); }
 }
 
 export async function clearStockedChunks() {
@@ -481,7 +485,17 @@ function findStockIndex(fromMsgId, toMsgId) {
 export async function deleteStockedChunk(fromMsgId, toMsgId) {
     const index = findStockIndex(fromMsgId, toMsgId);
     if (index < 0) return false;
+    stockedChunks[index] = emptyChunk(stockedChunks[index]);
+    await clearCheckpoint();
+    await saveStock();
+    return true;
+}
+
+export async function purgeStockedChunk(fromMsgId, toMsgId) {
+    const index = findStockIndex(fromMsgId, toMsgId);
+    if (index < 0) return false;
     stockedChunks.splice(index, 1);
+    await clearCheckpoint();
     await saveStock();
     return true;
 }
@@ -514,6 +528,7 @@ export async function regenerateStockedChunk(fromMsgId, toMsgId, { verbose = tru
         const liveIndex = findStockIndex(entry.fromMsgId, entry.toMsgId);
         if (liveIndex < 0) { rawError('The stock changed during regeneration. The new summary was discarded.'); return false; }
         stockedChunks[liveIndex] = { ...stockedChunks[liveIndex], summary, createdAt: new Date().toISOString() };
+        delete stockedChunks[liveIndex].emptiedAt;
         await saveStock();
         if (verbose) rawDone(`Stocked chunk regenerated (messages ${entry.fromMsgId}-${entry.toMsgId}).`);
         return true;
@@ -606,21 +621,22 @@ export async function autoStockChunks({ force = false, verbose = false } = {}) {
 }
 
 async function buildStockSegments(oldEnd, target, processOptions = {}) {
-    const segments = [];
-    const usedRanges = [];
-    let cursor = oldEnd + 1;
-    let usedStock = 0;
-    for (const entry of stockedChunks) {
-        if (entry.toMsgId < cursor || entry.fromMsgId < cursor) continue;
-        if (entry.toMsgId > target) break;
-        if (entry.fromMsgId > cursor) segments.push({ history: await processRange(cursor, entry.fromMsgId - 1, processOptions) });
-        segments.push({ stock: entry.summary });
-        usedStock++;
-        usedRanges.push(`${entry.fromMsgId}-${entry.toMsgId}`);
-        cursor = entry.toMsgId + 1;
+    const selected = selectChunksForMerge(stockedChunks, oldEnd, target);
+    if (selected.blockedBy) {
+        const { fromMsgId, toMsgId } = selected.blockedBy;
+        errorToast(`Chunk ${fromMsgId}-${toMsgId} is empty. Regenerate it before merging.`);
+        return null;
     }
-    if (cursor <= target) segments.push({ history: await processRange(cursor, target, processOptions) });
-    return { segments, usedStock, usedRanges };
+    const segments = [];
+    for (const segment of selected.segments) {
+        if (segment.stock !== undefined) segments.push({ stock: segment.stock });
+        else segments.push({ history: await processRange(segment.fromMsgId, segment.toMsgId, processOptions) });
+    }
+    return {
+        segments,
+        usedStock: selected.usedStock,
+        usedRanges: selected.segments.filter(segment => segment.stock !== undefined).map(segment => `${segment.fromMsgId}-${segment.toMsgId}`),
+    };
 }
 
 /**
@@ -847,7 +863,9 @@ export async function generateRollingSummary(messageId, options = {}) {
     const oldEnd = rollingSummary?.endMsgId ?? -1;
     if (target <= oldEnd) { errorToast(`Choose a message after ${oldEnd}; earlier content is already summarized.`); return ''; }
     draftBases.set(target, { endMsgId: oldEnd, updatedAt: rollingSummary?.updatedAt || null, summary: rollingSummary?.summary || '' });
-    const { segments, usedStock = 0 } = await buildStockSegments(oldEnd, target);
+    const stockPlan = await buildStockSegments(oldEnd, target);
+    if (!stockPlan) return '';
+    const { segments, usedStock = 0 } = stockPlan;
     announceMergeScope(oldEnd + 1, target, segments, usedStock);
     return summarizeHistory(segments, target, {});
 }
@@ -864,7 +882,9 @@ export async function generateActiveSummaryReplacement(options = {}) {
     const start = 0;
     const signature = summarySignature(active);
     regenerationBases.set(active.endMsgId, { signature, start, previousSummary: '' });
-    const { segments, usedStock = 0 } = await buildStockSegments(start - 1, active.endMsgId, { includeHidden: true });
+    const stockPlan = await buildStockSegments(start - 1, active.endMsgId, { includeHidden: true });
+    if (!stockPlan) return '';
+    const { segments, usedStock = 0 } = stockPlan;
     announceMergeScope(start, active.endMsgId, segments, usedStock);
     const result = await summarizeHistory(segments, active.endMsgId, { previousSummary: '', checkpointType: `regeneration:${signature}`, persistCheckpoint: false, addChunkComment: false });
     if (result && summarySignature(rollingSummary) !== signature) {

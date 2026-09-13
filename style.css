@@ -39,8 +39,10 @@
 .rmr-stock-viewer-body { display:flex; flex-direction:column; gap:8px; }
 .rmr-stock-item summary { display:flex; flex-wrap:wrap; align-items:center; gap:4px; }
 .rmr-stock-item-merged { opacity:.75; }
+.rmr-stock-item-empty { border-color:var(--SmartThemeEmColor); }
+.rmr-stock-item-overlap { border-color:#d69e2e; }
 .rmr-stock-badge { padding:1px 8px; border:1px solid var(--SmartThemeBorderColor); border-radius:999px; font:600 10px/1.5 monospace; color:var(--SmartThemeQuoteColor); }
-.rmr-stock-item:not(.rmr-stock-item-merged) .rmr-stock-badge { color:var(--SmartThemeEmColor); border-color:var(--SmartThemeEmColor); }
+.rmr-stock-item-pending .rmr-stock-badge, .rmr-stock-item-overlap .rmr-stock-badge, .rmr-stock-item-empty .rmr-stock-badge { color:var(--SmartThemeEmColor); border-color:var(--SmartThemeEmColor); }
 #rmr_stock_minibar { display:none; height:4px; margin:0 5px 2px; border-radius:999px; background:rgba(128,128,128,.22); overflow:hidden; cursor:help; }
 #rmr_stock_minibar_fill { height:100%; width:0%; border-radius:999px; background:linear-gradient(90deg, var(--SmartThemeQuoteColor, #7aa2f7), var(--SmartThemeEmColor, #f7768e)); transition:width .4s ease; }
 #rmr_stock_minibar.rmr-stocking #rmr_stock_minibar_fill { animation:rmrStockPulse 1.2s ease-in-out infinite; }

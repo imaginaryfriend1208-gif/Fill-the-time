@@ -13,3 +13,8 @@ export function deriveChunkStatus(chunk, activeEnd = -1, mergeFloor = -1) {
     if (chunk.fromMsgId <= protectedThrough && chunk.toMsgId > protectedThrough) return CHUNK_STATUS.OVERLAP;
     return CHUNK_STATUS.PENDING;
 }
+
+/** Return a tombstone copy without changing array membership. */
+export function emptyChunk(chunk, emptiedAt = new Date().toISOString()) {
+    return { ...chunk, summary: '', emptiedAt };
+}

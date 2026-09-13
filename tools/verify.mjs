@@ -83,7 +83,7 @@ const PUBLIC_EXPORTS = [
     'deleteArchiveEntry', 'updateRollingSummaryText', 'restorePreviousFromArchive', 'clearRollingSummary',
     'initFillTheTimeMacros', 'updateSummaryInjection', 'isValidConnectionProfileId', 'resolveConnectionProfileId',
     'getReasoningEffort', 'getIncludeReasoning', 'getMaxTokensForProfile', 'buildOverridePayload',
-    'isStocking', 'invalidateStockFrom', 'clearStockedChunks', 'deleteStockedChunk', 'regenerateStockedChunk',
+    'isStocking', 'invalidateStockFrom', 'clearStockedChunks', 'deleteStockedChunk', 'purgeStockedChunk', 'regenerateStockedChunk',
     'restockChunks', 'autoStockChunks', 'getWorldInfoText', 'getChunkTokenLimit', 'getStockContextLimit',
     'generateRollingSummary', 'generateActiveSummaryReplacement', 'acceptActiveSummaryReplacement',
     'regenerateActiveSummary', 'acceptRollingSummary', 'autoSplitSummarize', 'getPendingCheckpoint',
@@ -94,7 +94,7 @@ for (const name of PUBLIC_EXPORTS) {
     const re = new RegExp(`export\\s+(?:async\\s+)?(?:function|const|let)\\s+${name}\\b`);
     check('exports', `memories.js exports ${name}`, re.test(memories), 'public API must not be renamed or removed');
 }
-const NEW_EXPORTS = ['isArchiveIsolated', 'setArchiveIsolated', 'clearArchiveEntries', 'clearMergedStockedChunks', 'resolveMergeProfileId', 'resolveChunkProfileId', 'getProfileName'];
+const NEW_EXPORTS = ['getMergeFloor', 'isArchiveIsolated', 'setArchiveIsolated', 'clearArchiveEntries', 'clearMergedStockedChunks', 'resolveMergeProfileId', 'resolveChunkProfileId', 'getProfileName'];
 for (const name of NEW_EXPORTS) {
     const re = new RegExp(`export\\s+(?:async\\s+)?(?:function|const|let)\\s+${name}\\b`);
     check('exports', `memories.js exports ${name}`, re.test(memories), 'required by the v3.3.0 plan');
@@ -144,8 +144,12 @@ check('archive-isolation', 'slash commands cover archive control',
     /fillthetime-archive-hide/.test(commandsJs) && /fillthetime-archive-clear/.test(commandsJs));
 
 // -------------------------------------------------------- stock hygiene
-check('stock-hygiene', 'clearing the summary drops merged chunks',
-    /dropMergedStock/.test(memories));
+check('stock-hygiene', 'clear keeps stock and obsolete clear checkboxes are gone',
+    !/dropMergedStock|dropAllStock/.test(memories) && !/rmr-drop-merged|rmr-drop-all/.test(html));
+check('stock-hygiene', 'delete creates tombstone and purge is separate',
+    /deleteStockedChunk[\s\S]{0,350}emptyChunk/.test(memories) && /export async function purgeStockedChunk/.test(memories));
+check('stock-hygiene', 'stock merge blocks on empty chunk',
+    /selected\.blockedBy/.test(memories) && /Regenerate it before merging/.test(memories));
 check('stock-hygiene', 'clearStockedChunks also drops the pending checkpoint',
     /export async function clearStockedChunks[\s\S]{0,400}clearCheckpoint\(/.test(memories));
 check('stock-hygiene', 'checkpoint resume is guarded by a stock fingerprint',

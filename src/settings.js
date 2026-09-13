@@ -5,6 +5,7 @@ import { resetMessageButtons } from './messages.js';
 import { debug } from './logging.js';
 import { initTutorialUI, refreshTutorialLocale } from './tutorial.js';
 import { applyExtensionLocale, getAvailableLocales, getText, setExtensionLocale } from './locales.js';
+import { CHUNK_STATUS, deriveChunkStatus } from './summary-state.js';
 
 export let settings;
 export const Buttons = { STOP: 'chapter_button' };
@@ -334,7 +335,7 @@ export async function renderStockStatus() {
 }
 
 export async function openStockViewer() {
-    const { getStockedChunks, getRollingSummary, regenerateStockedChunk, deleteStockedChunk } = await import('./memories.js');
+    const { getStockedChunks, getRollingSummary, getMergeFloor, regenerateStockedChunk, deleteStockedChunk, purgeStockedChunk } = await import('./memories.js');
     $('#rmr_stock_viewer').remove();
     const overlay = $('<div id="rmr_stock_viewer" class="rmr-summary-popup-overlay"></div>');
     const dialog = $('<div class="rmr-summary-popup"></div>');
@@ -362,24 +363,22 @@ export async function openStockViewer() {
         body.empty();
         const entries = getStockedChunks();
         const activeEnd = getRollingSummary()?.endMsgId ?? -1;
+        const mergeEnd = getMergeFloor();
         if (!entries.length) { body.append($('<div class="rmr-summaries-empty">').text(getText('rmr_stock_empty', 'No stocked chunks yet.'))); return; }
         for (const entry of entries) {
-            const merged = entry.toMsgId <= activeEnd;
-            const badge = merged ? getText('rmr_stock_merged', 'merged') : getText('rmr_stock_pending', 'pending');
-            const tokens = await countTokens(entry.summary);
-            const item = $(`<details class="rmr-archive-item rmr-stock-item${merged ? ' rmr-stock-item-merged' : ''}"><summary>#${entry.fromMsgId}–${entry.toMsgId} · ${tokens} ${escapeHtml(getText('rmr_tokens', 'tokens'))} · <span class="rmr-stock-badge">${escapeHtml(badge)}</span> · ${escapeHtml(new Date(entry.createdAt).toLocaleString())}</summary><pre></pre><div class="rmr-summary-actions"><button type="button" class="menu_button rmr-stock-regen"><i class="fa-solid fa-rotate"></i> ${escapeHtml(getText('rmr_regenerate', 'Regenerate'))}</button><button type="button" class="menu_button rmr-stock-delete"><i class="fa-solid fa-trash-can"></i> ${escapeHtml(getText('rmr_delete', 'Delete'))}</button></div></details>`);
-            item.find('pre').text(entry.summary);
-            item.find('.rmr-stock-regen').on('click', async function () {
-                const button = $(this);
-                if (button.prop('disabled')) return;
-                button.prop('disabled', true).html('<i class="fa-solid fa-spinner fa-spin"></i>');
-                try { await regenerateStockedChunk(entry.fromMsgId, entry.toMsgId); }
-                finally { if (overlay.closest('body').length) await rebuild(); }
+            const status = deriveChunkStatus(entry, activeEnd, mergeEnd);
+            const badge = getText(`rmr_stock_${status}`, status);
+            const tokens = entry.summary ? await countTokens(entry.summary) : 0;
+            const item = $(`<details class="rmr-archive-item rmr-stock-item rmr-stock-item-${status}"><summary>#${entry.fromMsgId}–${entry.toMsgId} · ${tokens} ${escapeHtml(getText('rmr_tokens', 'tokens'))} · <span class="rmr-stock-badge">${escapeHtml(badge)}</span> · ${escapeHtml(new Date(entry.createdAt).toLocaleString())}</summary><pre></pre><div class="rmr-summary-actions"><button type="button" class="menu_button rmr-stock-regenerate">${escapeHtml(getText('rmr_regenerate', 'Regenerate'))}</button><button type="button" class="menu_button rmr-stock-delete">${escapeHtml(getText('rmr_delete', 'Delete'))}</button><button type="button" class="menu_button rmr-stock-purge">${escapeHtml(getText('rmr_stock_purge', 'Purge'))}</button></div></details>`);
+            item.find('pre').text(entry.summary || getText('rmr_stock_empty_tombstone', 'This chunk is empty and must be regenerated before merging.'));
+            item.find('.rmr-stock-regenerate').on('click', async () => { await regenerateStockedChunk(entry.fromMsgId, entry.toMsgId); await rebuild(); });
+            item.find('.rmr-stock-delete').prop('disabled', status === CHUNK_STATUS.EMPTY).on('click', async () => {
+                if (!confirm(getText('rmr_delete_stock_confirm', 'Empty this stocked chunk summary? It must be regenerated before merging.'))) return;
+                await deleteStockedChunk(entry.fromMsgId, entry.toMsgId); await rebuild();
             });
-            item.find('.rmr-stock-delete').on('click', async () => {
-                if (!confirm(getText('rmr_delete_stock_confirm', 'Delete this stocked chunk summary?'))) return;
-                await deleteStockedChunk(entry.fromMsgId, entry.toMsgId);
-                await rebuild();
+            item.find('.rmr-stock-purge').on('click', async () => {
+                if (!confirm(getText('rmr_purge_stock_confirm', 'Permanently remove this stocked chunk entry?'))) return;
+                await purgeStockedChunk(entry.fromMsgId, entry.toMsgId); await rebuild();
             });
             body.append(item);
         }
@@ -517,7 +516,7 @@ export async function showClearOrRestoreDialog() {
     const isolated = isArchiveIsolated();
     const canRestore = getArchiveEntries().length > 0 && !isolated;
     return new Promise(resolve => {
-        const overlay = $(`<div class="rmr-choice-overlay"><div class="rmr-choice-dialog"><h3>${escapeHtml(getText('rmr_change_active', 'Change active summary'))}</h3><p>${escapeHtml(canRestore ? getText('rmr_change_active_hint', 'Restore the newest archive, create empty, or cancel.') : getText('rmr_change_active_hint_none', 'No usable archive (empty or hidden). Create empty or cancel.'))}</p><label class="checkbox_label"><input type="checkbox" class="checkbox rmr-drop-merged" checked><span>${escapeHtml(getText('rmr_drop_merged_stock', 'Also delete chunks already merged into this summary (recommended)'))}</span></label><label class="checkbox_label"><input type="checkbox" class="checkbox rmr-drop-all"><span>${escapeHtml(getText('rmr_drop_all_stock', 'Delete ALL stocked chunks'))}</span></label><label class="checkbox_label"><input type="checkbox" class="checkbox rmr-drop-archive"><span>${escapeHtml(getText('rmr_drop_archive', 'Also delete this chat archive'))}</span></label><div class="rmr-choice-actions">${canRestore ? `<button class="menu_button restore">${escapeHtml(getText('rmr_restore_latest', 'Restore latest'))}</button>` : ''}<button class="menu_button empty">${escapeHtml(getText('rmr_create_empty', 'Create empty'))}</button><button class="menu_button cancel">${escapeHtml(getText('rmr_cancel', 'Cancel'))}</button></div></div></div>`);
+        const overlay = $(`<div class="rmr-choice-overlay"><div class="rmr-choice-dialog"><h3>${escapeHtml(getText('rmr_change_active', 'Change active summary'))}</h3><p>${escapeHtml(canRestore ? getText('rmr_change_active_hint', 'Restore the newest archive, create empty, or cancel.') : getText('rmr_change_active_hint_none', 'No usable archive (empty or hidden). Create empty or cancel.'))}</p><p>${escapeHtml(getText('rmr_clear_keeps_stock', 'Creating an empty summary keeps all stocked chunks so they can be merged again.'))}</p><label class="checkbox_label"><input type="checkbox" class="checkbox rmr-drop-archive"><span>${escapeHtml(getText('rmr_drop_archive', 'Also delete this chat archive'))}</span></label><div class="rmr-choice-actions">${canRestore ? `<button class="menu_button restore">${escapeHtml(getText('rmr_restore_latest', 'Restore latest'))}</button>` : ''}<button class="menu_button empty">${escapeHtml(getText('rmr_create_empty', 'Create empty'))}</button><button class="menu_button cancel">${escapeHtml(getText('rmr_cancel', 'Cancel'))}</button></div></div></div>`);
         $('body').append(overlay);
         let settled = false;
         const finish = value => { if (settled) return; settled = true; $(document).off('keydown.fttChoice'); overlay.remove(); resolve(value); };
@@ -526,8 +525,6 @@ export async function showClearOrRestoreDialog() {
         $(document).off('keydown.fttChoice').on('keydown.fttChoice', event => { if (event.key === 'Escape') finish(false); });
         overlay.find('.restore').on('click', async () => finish(await restorePreviousFromArchive()));
         overlay.find('.empty').on('click', async () => finish(await clearRollingSummary({
-            dropMergedStock: overlay.find('.rmr-drop-merged').prop('checked'),
-            dropAllStock: overlay.find('.rmr-drop-all').prop('checked'),
             dropArchive: overlay.find('.rmr-drop-archive').prop('checked'),
         })));
     });

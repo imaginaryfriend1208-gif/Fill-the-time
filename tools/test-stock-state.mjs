@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { selectChunksForMerge } from '../src/chunk-select.js';
-import { CHUNK_STATUS, deriveChunkStatus } from '../src/summary-state.js';
+import { CHUNK_STATUS, deriveChunkStatus, emptyChunk } from '../src/summary-state.js';
 
 let failures = 0;
 let assertions = 0;
@@ -28,6 +28,14 @@ const retainedLength = retained.length;
 check('chunks are merged at active end 250', retained.every(item => deriveChunkStatus(item, 250) === CHUNK_STATUS.MERGED));
 check('chunks become pending when active summary clears', retained.every(item => deriveChunkStatus(item, -1) === CHUNK_STATUS.PENDING));
 check('derivation never changes array length', retained.length === retainedLength);
+const tombstoned = retained.map((item, index) => index === 1 ? emptyChunk(item, '2026-09-13T00:00:00.000Z') : item);
+check('emptying middle chunk preserves array length', tombstoned.length === retained.length);
+check('emptied middle chunk has empty status', deriveChunkStatus(tombstoned[1], -1) === CHUNK_STATUS.EMPTY);
+check('emptying does not mutate original chunk', retained[1].summary === 'summary 66-130');
+check('tombstone records emptiedAt', tombstoned[1].emptiedAt === '2026-09-13T00:00:00.000Z');
+const blockedChain = selectChunksForMerge(tombstoned, -1, 190);
+check('merge across tombstone is blocked', blockedChain.blockedBy === tombstoned[1]);
+check('blocked middle range is reported', blockedChain.blockedBy?.fromMsgId === 66 && blockedChain.blockedBy?.toMsgId === 130);
 
 console.log('\n-- merge selection --');
 let result = selectChunksForMerge(retained, 250, 300);
