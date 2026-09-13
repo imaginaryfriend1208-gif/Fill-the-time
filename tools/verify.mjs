@@ -295,6 +295,10 @@ check('v4-routing', 'checkpoint fingerprint hashes content',
 check('v4-routing', 'archive is hidden by default per chat',
     /let archiveIsolated = true;/.test(memories) && /fillTheTimeArchiveShown/.test(memories));
 
+check('v4-routing', 'silent-merge checkbox removed from the Chunk Stock card',
+    !/rmr_auto_accept_end/.test(html) && !/auto_accept_end/.test(settingsJs.replace(/const obsolete = \[[^\]]*\]/, '')) && !/settings\.auto_accept_end/.test(memories),
+    'the row was a leftover; silent merge stays reachable via /fillthetime-end silent=true');
+
 // ---------------------------------------------------------------- i18n
 const REQUIRED_KEYS = [
     'rmr_merge_profile', 'rmr_chunk_profile',

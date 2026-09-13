@@ -1133,7 +1133,7 @@ export async function discardPendingCheckpoint() {
 }
 
 export async function endChapter(messageOrId, options = {}) {
-    if (options.autoAccept ?? settings.auto_accept_end) {
+    if (options.autoAccept) {
         if (endChapterSilentActive) { warningToast('A background merge is already running.'); return false; }
         return endChapterSilent(messageOrId, options);
     }
