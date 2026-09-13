@@ -315,8 +315,10 @@ export async function clearRollingSummary({ dropMergedStock = true, dropAllStock
     return true;
 }
 
+export function getActiveSummaryText() { return rollingSummary?.summary || ''; }
+
 export function initFillTheTimeMacros() {
-    MacrosParser.registerMacro('fillthetime', () => internalGenerationDepth > 0 ? '' : (rollingSummary?.summary || ''), 'Active cumulative IF Memory summary');
+    MacrosParser.registerMacro('fillthetime', () => internalGenerationDepth > 0 ? '' : getActiveSummaryText(), 'Active cumulative IF Memory summary');
     MacrosParser.registerMacro('lastMessageId', () => Math.max(0, (getContext().chat || []).length - 1), 'Most recent message ID');
     MacrosParser.registerMacro('firstIncludedMessageId', () => rollingSummary ? rollingSummary.endMsgId + 1 : 0, 'First message after the active summary');
 }
@@ -331,7 +333,7 @@ export function updateSummaryInjection() {
     // Same single-pass callback rule as the summarization prompts: a summary containing $&
     // must survive, and an id must not be rescanned for further macros.
     const injected = {
-        fillthetime: rollingSummary?.summary || '',
+        fillthetime: getActiveSummaryText(),
         lastmessageid: String(Math.max(0, (context.chat || []).length - 1)),
         firstincludedmessageid: String(rollingSummary ? rollingSummary.endMsgId + 1 : 0),
     };
@@ -698,7 +700,7 @@ async function generateFromText(content, chunk = 0, includePrevious = true, prev
     internalGenerationDepth++;
     try {
         const context = getContext();
-        const previous = includePrevious ? (previousOverride ?? rollingSummary?.summary ?? '') : '';
+        const previous = includePrevious ? (previousOverride ?? getActiveSummaryText()) : '';
         const useChunkPrompts = isChunkPass && settings.use_custom_chunk_prompts;
         const userTemplate = useChunkPrompts ? settings.chunk_prompt_template : settings.memory_prompt_template;
         const systemTemplate = useChunkPrompts ? settings.chunk_system_prompt : settings.memory_system_prompt;
@@ -714,9 +716,10 @@ async function generateFromText(content, chunk = 0, includePrevious = true, prev
         const macros = {
             content: contentText,
             previoussummary: previous,
+            previous_summary: previous,
             worldinfo: needsWorldInfo ? await getWorldInfoText() : '',
         };
-        const fillMacros = template => String(template || '').replace(/{{(content|previousSummary|worldInfo)}}/gi, (match, key) => macros[key.toLowerCase()] ?? match);
+        const fillMacros = template => String(template || '').replace(/{{(content|previousSummary|previous_summary|worldInfo)}}/gi, (match, key) => macros[key.toLowerCase()] ?? match);
         let userPrompt = fillMacros(userTemplate);
         let systemPrompt = fillMacros(systemTemplate);
         userPrompt = context.substituteParams(userPrompt, context.name1, context.name2);
@@ -844,12 +847,9 @@ export async function generateRollingSummary(messageId, options = {}) {
     const oldEnd = rollingSummary?.endMsgId ?? -1;
     if (target <= oldEnd) { errorToast(`Choose a message after ${oldEnd}; earlier content is already summarized.`); return ''; }
     draftBases.set(target, { endMsgId: oldEnd, updatedAt: rollingSummary?.updatedAt || null, summary: rollingSummary?.summary || '' });
-    const useStock = options.useStock ?? settings.merge_use_stock ?? true;
-    const ignorePrevious = options.ignorePrevious ?? settings.merge_ignore_previous ?? false;
-    if (ignorePrevious) infoToast('Fresh merge: the previous summary is not sent to the model.');
-    const { segments, usedStock = 0 } = useStock === false ? { segments: [{ history: await processRange(oldEnd + 1, target) }] } : await buildStockSegments(oldEnd, target);
+    const { segments, usedStock = 0 } = await buildStockSegments(oldEnd, target);
     announceMergeScope(oldEnd + 1, target, segments, usedStock);
-    return summarizeHistory(segments, target, ignorePrevious ? { previousSummary: '' } : {});
+    return summarizeHistory(segments, target, {});
 }
 
 function summarySignature(value) {
@@ -860,17 +860,13 @@ export async function generateActiveSummaryReplacement(options = {}) {
     if (!rollingSummary) { warningToast('No active summary to regenerate.'); return ''; }
     commandArgs = { ...options };
     const active = clone(rollingSummary);
-    const ignoreArchive = Boolean(options.ignoreArchive ?? options.ignorePrevious ?? (archiveIsolated || settings.use_archive_as_regen_base === false));
-    const base = ignoreArchive ? null : (usableArchiveEntries().filter(entry => entry.endMsgId < active.endMsgId).at(-1) || null);
-    if (ignoreArchive) infoToast('Regenerating without using the archive as a base.');
-    const start = base ? base.endMsgId + 1 : 0;
+    const base = null;
+    const start = 0;
     const signature = summarySignature(active);
-    regenerationBases.set(active.endMsgId, { signature, start, previousSummary: base?.summary || '' });
-    const { segments, usedStock = 0 } = options.useStock === false
-        ? { segments: [{ history: await processRange(start, active.endMsgId, { includeHidden: true }) }] }
-        : await buildStockSegments(start - 1, active.endMsgId, { includeHidden: true });
+    regenerationBases.set(active.endMsgId, { signature, start, previousSummary: '' });
+    const { segments, usedStock = 0 } = await buildStockSegments(start - 1, active.endMsgId, { includeHidden: true });
     announceMergeScope(start, active.endMsgId, segments, usedStock);
-    const result = await summarizeHistory(segments, active.endMsgId, { previousSummary: base?.summary || '', checkpointType: `regeneration:${signature}`, persistCheckpoint: false, addChunkComment: false });
+    const result = await summarizeHistory(segments, active.endMsgId, { previousSummary: '', checkpointType: `regeneration:${signature}`, persistCheckpoint: false, addChunkComment: false });
     if (result && summarySignature(rollingSummary) !== signature) {
         errorToast('The active summary changed during regeneration. Generate it again.');
         return '';

@@ -124,14 +124,20 @@ check('profile-routing', 'progress reports the profile in use',
 check('archive-isolation', 'per-chat metadata key exists', /fillTheTimeArchiveHidden/.test(memories));
 check('archive-isolation', 'isolation state is loaded on chat load',
     /archiveIsolated\s*=\s*Boolean\(/.test(memories));
-check('archive-isolation', 'regeneration can skip the archive base',
-    /ignoreArchive/.test(memories) && /use_archive_as_regen_base/.test(memories),
-    'generateActiveSummaryReplacement must honour isolation + the global setting');
+const regenerationBody = memories.slice(memories.indexOf('export async function generateActiveSummaryReplacement'), memories.indexOf('export async function acceptActiveSummaryReplacement'));
+const stockSegmentsBody = memories.slice(memories.indexOf('async function buildStockSegments'), memories.indexOf('function announceMergeScope'));
+check('archive-isolation', 'regeneration always starts from message zero without archive state',
+    /const base = null;/.test(regenerationBody) && /const start = 0;/.test(regenerationBody)
+    && /previousSummary: ''/.test(regenerationBody)
+    && !/archiveEntries|usableArchiveEntries/.test(regenerationBody));
+check('archive-isolation', 'stock selection never receives archive state', !/archive/i.test(stockSegmentsBody));
 check('archive-isolation', 'archive entries beyond the chat length are filtered',
     /endMsgId\s*<\s*chatLength|Number\(entry\.endMsgId\)\s*<\s*chatLength/.test(memories));
 check('archive-isolation', 'restore is blocked while isolated',
     /archiveIsolated[\s\S]{0,200}return false/.test(memories.match(/export async function restorePreviousFromArchive[\s\S]{0,600}/)?.[0] || ''));
-check('archive-isolation', 'fresh merge option exists', /ignorePrevious/.test(memories));
+check('archive-isolation', 'obsolete merge and regeneration choices are removed from runtime and UI',
+    !/merge_use_stock|merge_ignore_previous|use_archive_as_regen_base/.test(`${memories}\n${html}\n${commandsJs}`)
+    && /merge_use_stock/.test(settingsJs.match(/const obsolete = \[[^\]]+\]/)?.[0] || ''));
 check('archive-isolation', 'UI exposes the archive buttons',
     /rmr_archive_isolate/.test(html) && /rmr_archive_clear/.test(html) && /rmr_archive_isolate/.test(settingsJs) && /rmr_archive_clear/.test(settingsJs));
 check('archive-isolation', 'slash commands cover archive control',
@@ -144,8 +150,9 @@ check('stock-hygiene', 'clearStockedChunks also drops the pending checkpoint',
     /export async function clearStockedChunks[\s\S]{0,400}clearCheckpoint\(/.test(memories));
 check('stock-hygiene', 'checkpoint resume is guarded by a stock fingerprint',
     /stockKey/.test(memories));
-check('stock-hygiene', 'useStock can be turned off from the UI',
-    /merge_use_stock/.test(settingsJs) && /rmr_merge_use_stock/.test(html));
+check('stock-hygiene', 'rolling merges always select eligible stock',
+    /generateRollingSummary[\s\S]{0,900}await buildStockSegments/.test(memories)
+    && !/generateRollingSummary[\s\S]{0,900}useStock/.test(memories));
 check('stock-hygiene', 'merge scope is announced as one span, not a list of chunk boundaries',
     /function announceMergeScope/.test(memories)
     && (memories.match(/announceMergeScope\(/g) || []).length >= 3
@@ -228,7 +235,7 @@ check('concurrency', 'concurrency can be turned off',
 
 // -------------------------------------------------- prompt substitution
 check('prompt-substitution', 'summarization macros are filled in one pass via a callback',
-    memories.includes('{{(content|previousSummary|worldInfo)}}/gi, (match, key)') && memories.includes('const fillMacros ='),
+    memories.includes('{{(content|previousSummary|previous_summary|worldInfo)}}/gi, (match, key)') && memories.includes('const fillMacros ='),
     'chained replaces rescan inserted text and reinterpret $-directives inside it');
 check('prompt-substitution', 'injection macros are filled in one pass via a callback',
     memories.includes('{{(fillthetime|lastMessageId|firstIncludedMessageId)}}/gi, (match, key)'));
@@ -252,9 +259,9 @@ check('prompt-substitution', 'the executable prompt test ships with the extensio
 
 // ---------------------------------------------------------------- i18n
 const REQUIRED_KEYS = [
-    'rmr_merge_profile', 'rmr_chunk_profile', 'rmr_merge_use_stock', 'rmr_merge_ignore_previous',
+    'rmr_merge_profile', 'rmr_chunk_profile',
     'rmr_archive_hide', 'rmr_archive_show', 'rmr_archive_clear_all', 'rmr_archive_hidden_note',
-    'rmr_archive_clear_confirm', 'rmr_use_archive_as_regen_base', 'rmr_stock_delete_all', 'rmr_stock_delete_merged',
+    'rmr_archive_clear_confirm', 'rmr_stock_delete_all', 'rmr_stock_delete_merged',
     'rmr_stock_during_merge',
 ];
 for (const locale of ['vi-vn', 'fr-fr']) {

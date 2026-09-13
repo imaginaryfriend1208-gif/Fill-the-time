@@ -41,10 +41,6 @@ Trigger: click ⏹ on a message, or enter an End ID and click Create Chapter." d
                         <input class="text_pole" id="rmr_split_stages" type="number" min="0" value="1">
                     </div>
                 </div>
-                <div class="flex-container flexFlowColumn marginTopBot5">
-                    <label class="checkbox_label" for="rmr_merge_use_stock"><input id="rmr_merge_use_stock" class="checkbox" type="checkbox"><span data-i18n="rmr_merge_use_stock">Reuse stocked chunks when merging</span></label>
-                    <label class="checkbox_label" for="rmr_merge_ignore_previous"><input id="rmr_merge_ignore_previous" class="checkbox" type="checkbox"><span data-i18n="rmr_merge_ignore_previous">Fresh merge: ignore the previous summary and the archive</span></label>
-                </div>
                 <div class="flex-container flexGap5 marginTopBot5">
                     <button type="button" class="menu_button" id="rmr_create_chapter"><i class="fa-solid fa-plus"></i> <span data-i18n="rmr_create_chapter">Create Chapter</span></button>
                     <label class="checkbox_label" for="rmr_auto_accept_stages"><input id="rmr_auto_accept_stages" class="checkbox" type="checkbox" checked><span data-i18n="rmr_auto_accept_stages">Auto-accept intermediate stages (review only the final)</span></label>
@@ -165,7 +161,6 @@ Use chunks directly: skip the merge pass and concatenate chunk digests as the fi
                 <label class="checkbox_label" for="rmr_hide_chapter"><input id="rmr_hide_chapter" class="checkbox" type="checkbox"><span data-i18n="rmr_hide_chapter">Hide messages after accepting their summary</span></label>
                 <label class="checkbox_label" for="rmr_archive_on_accept"><input id="rmr_archive_on_accept" class="checkbox" type="checkbox"><span data-i18n="rmr_archive_on_accept">Archive the previous summary by default</span></label>
                 <label class="checkbox_label" for="rmr_add_chunk_summaries"><input id="rmr_add_chunk_summaries" class="checkbox" type="checkbox"><span data-i18n="rmr_add_chunk_summaries">Add chunk summaries as a chat comment</span></label>
-                <label class="checkbox_label" for="rmr_use_archive_as_regen_base"><input id="rmr_use_archive_as_regen_base" class="checkbox" type="checkbox"><span data-i18n="rmr_use_archive_as_regen_base">Use the newest archive as the base when regenerating</span></label>
                 <label class="checkbox_label" for="rmr_use_chunk_summaries_as_chapter"><input id="rmr_use_chunk_summaries_as_chapter" class="checkbox" type="checkbox"><span data-i18n="rmr_use_chunk_summaries">Use chunk summaries directly as final summary</span></label>
             </div>
             <hr>

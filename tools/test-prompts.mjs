@@ -71,6 +71,7 @@ const moduleSource = [
     '}',
     'export function __depth() { return internalGenerationDepth; }',
     'const rawInfo = () => {};',
+    "const getActiveSummaryText = () => rollingSummary?.summary || '';",
     "const resolveChunkProfileId = () => 'CHUNK_PROFILE';",
     "const resolveMergeProfileId = () => 'MERGE_PROFILE';",
     'const rateLimitSlot = async () => {};',
@@ -157,6 +158,8 @@ r = await send({ includePrevious: true, active: 'OLD', previousOverride: undefin
 eq('override undefined falls back to the active summary', r.user, 'MUSR prev=[OLD] content=[BODY]');
 r = await send({ includePrevious: true, active: null });
 eq('no active summary -> empty previousSummary, not "null"', r.user, 'MUSR prev=[] content=[BODY]');
+r = await send({ includePrevious: true, active: 'OLD', settings: { memory_prompt_template: 'camel=[{{previousSummary}}] snake=[{{previous_summary}}]' } });
+eq('{{previous_summary}} aliases {{previousSummary}}', r.user, 'camel=[OLD] snake=[OLD]');
 
 console.log('\n-- world info --');
 r = await send({ includePrevious: false, settings: { use_custom_chunk_prompts: true, chunk_prompt_template: 'U=[{{worldinfo}}]', chunk_system_prompt: 'S=[{{WorldInfo}}]' } });
