@@ -63,6 +63,20 @@ const indexJs = read('index.js');
 const html = read('templates/settings_panel.html');
 const css = read('style.css');
 
+// ------------------------------------------------------------- stock state
+for (const file of ['src/chunk-select.js', 'src/summary-state.js', 'tools/test-stock-state.mjs']) {
+    check('stock-state', `${file} exists`, existsSync(join(root, file)));
+}
+for (const file of ['src/chunk-select.js', 'src/summary-state.js']) {
+    const source = existsSync(join(root, file)) ? read(file) : '';
+    check('stock-state', `${file} is independent of SillyTavern`,
+        !source.includes('extensions.js') && !source.includes('script.js'));
+}
+check('stock-state', 'chunk selector does not reference archive state',
+    existsSync(join(root, 'src/chunk-select.js')) && !read('src/chunk-select.js').toLowerCase().includes('archive'));
+check('stock-state', 'stock-state executable test has at least 20 assertions',
+    existsSync(join(root, 'tools/test-stock-state.mjs')) && (read('tools/test-stock-state.mjs').match(/check\(/g) || []).length >= 20);
+
 // ---------------------------------------------------------------- exports
 const PUBLIC_EXPORTS = [
     'getRollingSummary', 'getArchiveEntries', 'getStockedChunks', 'loadRollingSummaryData',
