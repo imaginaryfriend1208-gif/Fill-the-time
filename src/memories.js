@@ -3,7 +3,7 @@ import { MacrosParser } from '../../../../macros.js';
 import { getRegexedString, regex_placement } from '../../../regex/engine.js';
 import { settings } from './settings.js';
 import { debug } from './logging.js';
-import { selectChunksForMerge } from './chunk-select.js';
+import { selectChunksForMerge, planChunks } from './chunk-select.js';
 import { emptyChunk } from './summary-state.js';
 import { notify } from './notify.js';
 import { ConnectionManagerRequestService } from '../../../shared.js';
@@ -623,10 +623,9 @@ export async function autoStockChunks({ force = false, verbose = false } = {}) {
         const { pieces, tail } = await buildChunks(history);
         if (!pieces.length) {
             if (verbose) {
-                let tokens = 0;
-                try { tokens = tail ? await context.getTokenCountAsync(tail.text) : 0; } catch { tokens = Math.ceil((tail?.text || '').length / 4); }
-                const maxTokens = getChunkTokenLimit(context);
-                rawInfo(`Not enough new content for a full chunk yet (~${tokens}/${maxTokens} tokens since message ${base + 1}). The tail is summarized directly when you create the chapter.`);
+                const tokens = tail?.tokens ?? 0;
+                const needed = getChunkTokenMin(context) || getChunkTokenLimit(context);
+                rawInfo(`Not enough new content for a full chunk yet (~${tokens}/${needed} tokens since message ${base + 1}). The tail is summarized directly when you create the chapter.`);
             }
             return false;
         }
@@ -828,8 +827,15 @@ async function generateFromText(content, chunk = 0, includePrevious = true, prev
 /** True when the most recent generateFromText() result ended because of the output limit. */
 export function wasLastGenerationTruncated() { return lastGenerationTruncated; }
 
+/** Max input tokens per chunk: the custom setting, or the model context when it is 0. */
 export function getChunkTokenLimit(context = getContext()) {
-    return Math.max(100, Number(context.maxContext || 4096) - 100);
+    const custom = Number(settings?.chunk_input_max_tokens) || 0;
+    return custom > 0 ? Math.max(100, custom) : Math.max(100, Number(context.maxContext || 4096) - 100);
+}
+
+/** Min input tokens for stocking a trailing chunk (0 = wait until the next message overflows the max). */
+export function getChunkTokenMin(context = getContext()) {
+    return Math.min(getChunkTokenLimit(context), Math.max(0, Number(settings?.chunk_input_min_tokens) || 0));
 }
 
 export function getStockContextLimit() {
@@ -839,20 +845,9 @@ export function getStockContextLimit() {
 
 async function buildChunks(history) {
     const context = getContext();
-    const maxTokens = getChunkTokenLimit(context);
-    const pieces = [];
-    let current = null;
-    for (const message of history) {
-        const index = message.index ?? -1;
-        const text = `${message.name ? `${message.name}: ` : ''}${message.mes || ''}`;
-        const candidate = current ? `${current.text}\n\n${text}` : text;
-        let tokens;
-        try { tokens = await context.getTokenCountAsync(candidate); } catch { tokens = Math.ceil(candidate.length / 4); }
-        if (tokens > maxTokens && current) { pieces.push(current); current = { text, startId: index, endId: index }; }
-        else if (tokens > maxTokens) { pieces.push({ text, startId: index, endId: index }); current = null; }
-        else current = current ? { ...current, text: candidate, endId: index } : { text: candidate, startId: index, endId: index };
-    }
-    return { pieces, tail: current };
+    const entries = history.map(message => ({ text: `${message.name ? `${message.name}: ` : ''}${message.mes || ''}`, index: message.index ?? -1 }));
+    const countTokens = async text => { try { return await context.getTokenCountAsync(text); } catch { return Math.ceil(text.length / 4); } };
+    return planChunks(entries, countTokens, { maxTokens: getChunkTokenLimit(context), minTokens: getChunkTokenMin(context) });
 }
 
 async function summarizeHistory(segments, target, options = {}) {

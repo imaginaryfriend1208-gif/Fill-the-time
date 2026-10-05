@@ -81,6 +81,7 @@ const defaults = {
     memory_prompt_template: USER_PROMPT, rate_limit: 0, profile: null, hide_chapter: true,
     use_chunk_summaries_as_chapter: false, archive_on_accept: true,
     auto_stock_chunks: false, stock_profile: null, stock_context_limit: 0,
+    chunk_input_min_tokens: 0, chunk_input_max_tokens: 0,
     merge_max_tokens: 0, chunk_max_tokens: 0, merge_continuations: 2,
     chunk_system_prompt: CHUNK_SYSTEM_PROMPT, chunk_prompt_template: CHUNK_USER_PROMPT,
     summarize_presets: [DEFAULT_PRESET, WRITER_DIARY_PRESET, CHARACTER_DIARY_PRESET], current_summarize_preset: DEFAULT_PRESET.id,
@@ -220,6 +221,9 @@ async function loadUI() {
     populateProfiles(); $('#rmr_profile').off('change').on('change', function () { settings.profile = this.value || null; save(); });
     $('#rmr_stock_profile').off('change').on('change', function () { settings.stock_profile = this.value || null; save(); });
     $('#rmr_stock_context_limit').val(settings.stock_context_limit || '').off('change').on('change', function () { settings.stock_context_limit = Math.max(0, Number(this.value) || 0); this.value = settings.stock_context_limit || ''; save(); renderStockStatus(); });
+    for (const [id, key] of [['#rmr_chunk_input_min_tokens', 'chunk_input_min_tokens'], ['#rmr_chunk_input_max_tokens', 'chunk_input_max_tokens']]) {
+        $(id).val(settings[key] || '').off('change').on('change', function () { settings[key] = Math.max(0, Math.floor(Number(this.value) || 0)); this.value = settings[key] || ''; save(); });
+    }
     $('#rmr_inject_enabled').prop('checked', settings.inject_enabled).off('change').on('change', async function () { settings.inject_enabled = this.checked; save(); await updateInjection(); });
     $('#rmr_inject_depth').val(settings.inject_depth).off('change').on('change', async function () { settings.inject_depth = Math.max(0, Number(this.value) || 0); save(); await updateInjection(); });
     const roles = $('#rmr_inject_role').empty();

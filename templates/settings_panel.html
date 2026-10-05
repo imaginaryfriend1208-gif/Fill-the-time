@@ -62,7 +62,8 @@ Trigger: click ⏹ on a message, or enter an End ID and click Create Chapter." d
                         <span data-i18n="rmr_chunk_stock">Chunk Stock</span><span class="rmr-info-icon" data-tip="Pre-summarizes message chunks in the background so Create Chapter reuses them instead of re-reading raw messages. Auto-stock runs after each generation.
 Stock Now: force-stock all new messages.
 Restock: discard unmerged chunks and re-stock from the active summary.
-Token budget: limits how many tokens the meter shows (0 = model context)." data-i18n-tip="rmr_info_chunk_stock"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6.7"/><path d="M8 7.2v4" stroke-linecap="round"/><circle cx="8" cy="4.9" r=".85" fill="currentColor" stroke="none"/></svg></span>
+Token budget: limits how many tokens the meter shows (0 = model context).
+Min/Max input tokens: a chunk never splits a message; it stops before the message that would pass the max, and is stocked once it reaches the min." data-i18n-tip="rmr_info_chunk_stock"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6.7"/><path d="M8 7.2v4" stroke-linecap="round"/><circle cx="8" cy="4.9" r=".85" fill="currentColor" stroke="none"/></svg></span>
                         <div class="rmr-stock-card-actions">
                             <button type="button" class="menu_button" id="rmr_stock_now" data-i18n-title="rmr_stock_now" title="Stock now"><i class="fa-solid fa-play"></i></button>
                             <button type="button" class="menu_button" id="rmr_view_stock" style="display:none" data-i18n-title="rmr_view_stock" title="View stock"><i class="fa-solid fa-eye"></i></button>
@@ -74,6 +75,12 @@ Token budget: limits how many tokens the meter shows (0 = model context)." data-
                     <div class="rmr-chunk-size-row">
                         <label for="rmr_stock_context_limit"><small data-i18n="rmr_stock_context_limit">Token budget for the meter below (0 = model context), e.g. 100000</small></label>
                         <input class="text_pole widthNatural" id="rmr_stock_context_limit" type="number" min="0" step="1000" placeholder="auto">
+                    </div>
+                    <div class="rmr-chunk-size-row">
+                        <label for="rmr_chunk_input_min_tokens"><small data-i18n="rmr_chunk_input_min_tokens">Min input tokens per chunk (0 = fill up to the max), e.g. 10000</small></label>
+                        <input class="text_pole widthNatural" id="rmr_chunk_input_min_tokens" type="number" min="0" step="1000" placeholder="0">
+                        <label for="rmr_chunk_input_max_tokens"><small data-i18n="rmr_chunk_input_max_tokens">Max input tokens per chunk (0 = model context), e.g. 15000</small></label>
+                        <input class="text_pole widthNatural" id="rmr_chunk_input_max_tokens" type="number" min="0" step="1000" placeholder="auto">
                     </div>
                     <div id="rmr_stock_status" class="rmr-stock-body" style="display:none">
                         <span id="rmr_stock_status_text" class="rmr-stock-info"></span>

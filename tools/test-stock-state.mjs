@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { selectChunksForMerge } from '../src/chunk-select.js';
+import { selectChunksForMerge, planChunks } from '../src/chunk-select.js';
 import { CHUNK_STATUS, deriveChunkStatus, emptyChunk } from '../src/summary-state.js';
 
 let failures = 0;
@@ -62,6 +62,26 @@ result = selectChunksForMerge([], 4, 8);
 check('empty stock produces raw range', result.segments[0]?.fromMsgId === 5 && result.segments[0]?.toMsgId === 8);
 result = selectChunksForMerge(null, 4, 4);
 check('empty merge range produces no segment', result.segments.length === 0);
+
+console.log('\n-- chunk planning (min/max input tokens) --');
+// Token count = number of 'x' characters, so separators are free and sizes are exact.
+const count = text => (text.match(/x/g) || []).length;
+const msgs = sizes => sizes.map((size, index) => ({ text: 'x'.repeat(size), index }));
+let plan = await planChunks(msgs([4000, 4000, 4000, 4000, 4000]), count, { maxTokens: 15000, minTokens: 10000 });
+check('piece stops before the message that would pass max', plan.pieces[0]?.endId === 2 && plan.pieces[0]?.tokens === 12000, JSON.stringify(plan.pieces[0]));
+check('remaining 8000 stays as tail below min', plan.pieces.length === 1 && plan.tail?.startId === 3 && plan.tail?.tokens === 8000);
+plan = await planChunks(msgs([6000, 5000]), count, { maxTokens: 15000, minTokens: 10000 });
+check('tail reaching min is stocked', plan.pieces.length === 1 && plan.pieces[0].endId === 1 && plan.tail === null);
+plan = await planChunks(msgs([6000, 5000]), count, { maxTokens: 15000 });
+check('min 0 keeps tail until max overflows', plan.pieces.length === 0 && plan.tail?.tokens === 11000);
+plan = await planChunks(msgs([9000, 15500, 3000]), count, { maxTokens: 15000, minTokens: 10000 });
+check('oversized single message is never cut', plan.pieces[1]?.startId === 1 && plan.pieces[1]?.endId === 1 && plan.pieces[1]?.tokens === 15500);
+check('piece before oversized message closes below min', plan.pieces[0]?.endId === 0 && plan.pieces[0]?.tokens === 9000);
+check('message after oversized one starts a new tail', plan.tail?.startId === 2);
+plan = await planChunks(msgs([5000, 3000]), count, { maxTokens: 8000, minTokens: 20000 });
+check('min is clamped to max', plan.pieces.length === 1 && plan.pieces[0].tokens === 8000 && plan.tail === null);
+plan = await planChunks([], count, { maxTokens: 15000, minTokens: 10000 });
+check('empty input gives no pieces', plan.pieces.length === 0 && plan.tail === null);
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const selectorSource = readFileSync(join(root, 'src/chunk-select.js'), 'utf8').toLowerCase();

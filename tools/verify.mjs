@@ -91,7 +91,7 @@ const PUBLIC_EXPORTS = [
     'initFillTheTimeMacros', 'updateSummaryInjection', 'isValidConnectionProfileId', 'resolveConnectionProfileId',
     'getReasoningEffort', 'getIncludeReasoning', 'getMaxTokensForProfile', 'buildOverridePayload',
     'isStocking', 'invalidateStockFrom', 'clearStockedChunks', 'deleteStockedChunk', 'purgeStockedChunk', 'regenerateStockedChunk',
-    'restockChunks', 'autoStockChunks', 'getWorldInfoText', 'getChunkTokenLimit', 'getStockContextLimit',
+    'restockChunks', 'autoStockChunks', 'getWorldInfoText', 'getChunkTokenLimit', 'getChunkTokenMin', 'getStockContextLimit',
     'generateRollingSummary', 'generateActiveSummaryReplacement', 'acceptActiveSummaryReplacement',
     'regenerateActiveSummary', 'acceptRollingSummary', 'autoSplitSummarize', 'getPendingCheckpoint',
     'resumePendingCheckpoint', 'discardPendingCheckpoint', 'endChapter', 'isSilentMergeRunning',
@@ -305,6 +305,7 @@ const REQUIRED_KEYS = [
     'rmr_archive_hide', 'rmr_archive_show', 'rmr_archive_clear_all', 'rmr_archive_hidden_note',
     'rmr_archive_clear_confirm', 'rmr_stock_delete_all', 'rmr_stock_delete_merged',
     'rmr_merge_max_tokens', 'rmr_chunk_max_tokens', 'rmr_merge_continuations',
+    'rmr_chunk_input_min_tokens', 'rmr_chunk_input_max_tokens',
 ];
 for (const locale of ['vi-vn', 'fr-fr']) {
     let data = {};
