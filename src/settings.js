@@ -73,9 +73,9 @@ End the diary with a short "Things still on my mind" section: unfinished busines
 Compress older entries more than recent ones, but never delete a recorded event or a REMEMBER note unless newer events change their meaning.
 </format>
 <instructions>Stay strictly in {{char}}'s limited point of view and voice. Write in plain everyday language, the way a real person writes in a private diary, not literary or flowery prose. Never use em dashes or en dashes in any form (—, –, or --); use commas, periods, or parentheses instead. Return plain unformatted text only, no markdown.</instructions>`;
-const DEFAULT_PRESET = { id: 'preset-default-summarize', name: 'Rolling Summary', systemPrompt: SYSTEM_PROMPT, userPrompt: USER_PROMPT, profile: null, rateLimit: 0 };
-const WRITER_DIARY_PRESET = { id: 'preset-writer-diary', name: "Writer's Diary (3rd person limited)", systemPrompt: WRITER_DIARY_SYSTEM, userPrompt: DIARY_USER_PROMPT, profile: null, rateLimit: 0 };
-const CHARACTER_DIARY_PRESET = { id: 'preset-character-diary', name: "Character's Diary (1st person)", systemPrompt: CHARACTER_DIARY_SYSTEM, userPrompt: DIARY_USER_PROMPT, profile: null, rateLimit: 0 };
+const DEFAULT_PRESET = { id: 'preset-default-summarize', name: 'Rolling Summary', systemPrompt: SYSTEM_PROMPT, userPrompt: USER_PROMPT, chunkSystemPrompt: CHUNK_SYSTEM_PROMPT, chunkUserPrompt: CHUNK_USER_PROMPT, profile: null, rateLimit: 0 };
+const WRITER_DIARY_PRESET = { id: 'preset-writer-diary', name: "Writer's Diary (3rd person limited)", systemPrompt: WRITER_DIARY_SYSTEM, userPrompt: DIARY_USER_PROMPT, chunkSystemPrompt: CHUNK_SYSTEM_PROMPT, chunkUserPrompt: CHUNK_USER_PROMPT, profile: null, rateLimit: 0 };
+const CHARACTER_DIARY_PRESET = { id: 'preset-character-diary', name: "Character's Diary (1st person)", systemPrompt: CHARACTER_DIARY_SYSTEM, userPrompt: DIARY_USER_PROMPT, chunkSystemPrompt: CHUNK_SYSTEM_PROMPT, chunkUserPrompt: CHUNK_USER_PROMPT, profile: null, rateLimit: 0 };
 const defaults = {
     is_enabled: true, show_buttons: [Buttons.STOP], memory_system_prompt: SYSTEM_PROMPT,
     memory_prompt_template: USER_PROMPT, rate_limit: 0, profile: null, hide_chapter: true,
@@ -110,7 +110,7 @@ function migrate(value) {
     for (const builtin of [WRITER_DIARY_PRESET, CHARACTER_DIARY_PRESET]) {
         const existing = value.summarize_presets.find(preset => preset?.id === builtin.id);
         if (!existing) { value.summarize_presets.push(clone(builtin)); changed = true; }
-        else if (existing.systemPrompt !== builtin.systemPrompt || existing.userPrompt !== builtin.userPrompt) { existing.systemPrompt = builtin.systemPrompt; existing.userPrompt = builtin.userPrompt; changed = true; }
+        else if (existing.systemPrompt !== builtin.systemPrompt || existing.userPrompt !== builtin.userPrompt || existing.chunkSystemPrompt !== builtin.chunkSystemPrompt || existing.chunkUserPrompt !== builtin.chunkUserPrompt) { existing.systemPrompt = builtin.systemPrompt; existing.userPrompt = builtin.userPrompt; existing.chunkSystemPrompt = builtin.chunkSystemPrompt; existing.chunkUserPrompt = builtin.chunkUserPrompt; changed = true; }
     }
     return changed;
 }
@@ -232,8 +232,8 @@ async function loadUI() {
     $('#rmr_inject_prompt').off('change').on('change', async function () { settings.inject_prompt = this.value || INJECT_PROMPT; save(); await updateInjection(); });
     $('#rmr_memory_system_prompt').off('change').on('change', function () { settings.memory_system_prompt = this.value || SYSTEM_PROMPT; save(); presetUI(); });
     $('#rmr_memory_prompt_template').off('change').on('change', function () { settings.memory_prompt_template = this.value || USER_PROMPT; save(); presetUI(); });
-    $('#rmr_chunk_system_prompt').off('change').on('change', function () { settings.chunk_system_prompt = this.value || CHUNK_SYSTEM_PROMPT; save(); });
-    $('#rmr_chunk_prompt_template').off('change').on('change', function () { settings.chunk_prompt_template = this.value || CHUNK_USER_PROMPT; save(); });
+    $('#rmr_chunk_system_prompt').off('change').on('change', function () { settings.chunk_system_prompt = this.value || CHUNK_SYSTEM_PROMPT; save(); presetUI(); });
+    $('#rmr_chunk_prompt_template').off('change').on('change', function () { settings.chunk_prompt_template = this.value || CHUNK_USER_PROMPT; save(); presetUI(); });
     $('#rmr_create_chapter').off('click').on('click', async function () {
         const button = $(this);
         if (button.prop('disabled')) return;
@@ -426,7 +426,7 @@ const presetById = id => settings.summarize_presets.find(item => item.id === id)
 function presetUI() {
     const select = $('#rmr_summarize_preset'); select.find('option:not([value=""])').remove();
     const current = presetById(settings.current_summarize_preset);
-    const dirty = current && (current.systemPrompt !== settings.memory_system_prompt || current.userPrompt !== settings.memory_prompt_template);
+    const dirty = current && (current.systemPrompt !== settings.memory_system_prompt || current.userPrompt !== settings.memory_prompt_template || (current.chunkSystemPrompt != null && current.chunkSystemPrompt !== settings.chunk_system_prompt) || (current.chunkUserPrompt != null && current.chunkUserPrompt !== settings.chunk_prompt_template));
     for (const preset of settings.summarize_presets) select.append($('<option>').val(preset.id).text(preset.id === current?.id && dirty ? `${preset.name} *` : preset.name));
     select.val(settings.current_summarize_preset || '');
     $('#rmr_update_summarize_preset,#rmr_delete_summarize_preset,#rmr_export_summarize_preset').prop('disabled', !settings.current_summarize_preset);
@@ -434,17 +434,19 @@ function presetUI() {
 function applyPreset(id) {
     const preset = presetById(id); if (!preset) return;
     settings.current_summarize_preset = id; settings.memory_system_prompt = preset.systemPrompt; settings.memory_prompt_template = preset.userPrompt;
+    if (preset.chunkSystemPrompt != null) settings.chunk_system_prompt = preset.chunkSystemPrompt || CHUNK_SYSTEM_PROMPT;
+    if (preset.chunkUserPrompt != null) settings.chunk_prompt_template = preset.chunkUserPrompt || CHUNK_USER_PROMPT;
     if (preset.profile) settings.profile = preset.profile; settings.rate_limit = Number(preset.rateLimit) || 0; save();
-    $('#rmr_memory_system_prompt').val(settings.memory_system_prompt); $('#rmr_memory_prompt_template').val(settings.memory_prompt_template); $('#rmr_profile').val(settings.profile || ''); $('#rmr_rate_limit').val(settings.rate_limit);
+    $('#rmr_memory_system_prompt').val(settings.memory_system_prompt); $('#rmr_memory_prompt_template').val(settings.memory_prompt_template); $('#rmr_chunk_system_prompt').val(settings.chunk_system_prompt); $('#rmr_chunk_prompt_template').val(settings.chunk_prompt_template); $('#rmr_profile').val(settings.profile || ''); $('#rmr_rate_limit').val(settings.rate_limit);
 }
-function snapshot(name) { return { id: `preset-${Date.now()}-${Math.floor(Math.random()*1000)}`, name, systemPrompt: settings.memory_system_prompt, userPrompt: settings.memory_prompt_template, profile: settings.profile, rateLimit: settings.rate_limit }; }
+function snapshot(name) { return { id: `preset-${Date.now()}-${Math.floor(Math.random()*1000)}`, name, systemPrompt: settings.memory_system_prompt, userPrompt: settings.memory_prompt_template, chunkSystemPrompt: settings.chunk_system_prompt, chunkUserPrompt: settings.chunk_prompt_template, profile: settings.profile, rateLimit: settings.rate_limit }; }
 function bindPresets() {
     presetUI();
     $('#rmr_summarize_preset').off('change').on('change', function () { if (this.value) applyPreset(this.value); else { settings.current_summarize_preset = null; save(); } presetUI(); });
     $('#rmr_save_summarize_preset').off('click').on('click', () => { const name = prompt('Preset name:'); if (!name?.trim()) return; const duplicate = settings.summarize_presets.find(item => item.name.toLowerCase() === name.trim().toLowerCase()); if (duplicate && !confirm(`Overwrite "${duplicate.name}"?`)) return; const preset = snapshot(name.trim()); if (duplicate) Object.assign(duplicate, preset, {id:duplicate.id}); else settings.summarize_presets.push(preset); settings.current_summarize_preset = duplicate?.id || preset.id; save(); presetUI(); });
     $('#rmr_update_summarize_preset').off('click').on('click', () => { const preset = presetById(settings.current_summarize_preset); if (!preset) return; Object.assign(preset, snapshot(preset.name), {id:preset.id}); save(); presetUI(); toastr.success('Preset updated.','IF Memory'); });
     $('#rmr_delete_summarize_preset').off('click').on('click', () => { const preset = presetById(settings.current_summarize_preset); if (!preset || !confirm(`Delete "${preset.name}"?`)) return; settings.summarize_presets = settings.summarize_presets.filter(item => item.id !== preset.id); settings.current_summarize_preset = null; save(); presetUI(); });
-    $('#rmr_export_summarize_preset').off('click').on('click', () => { const preset = presetById(settings.current_summarize_preset); if (preset) download(`${preset.name}.json`, {version:'3.0',type:'summarize',preset}); });
+    $('#rmr_export_summarize_preset').off('click').on('click', () => { const preset = presetById(settings.current_summarize_preset); if (preset) download(`${preset.name}.json`, {version:'3.2',type:'summarize',preset}); });
     $('#rmr_import_summarize_preset').off('click').on('click', () => choose(data => { if (data.type !== 'summarize' || !data.preset?.name || !data.preset?.userPrompt) throw new Error('Invalid summarize preset.'); const preset = {...data.preset,id:`preset-${Date.now()}`}; if (/{{timeline}}/i.test(preset.userPrompt)) preset.userPrompt = USER_PROMPT; settings.summarize_presets.push(preset); settings.current_summarize_preset = preset.id; save(); applyPreset(preset.id); presetUI(); }));
 }
 function download(name,data) { const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})); const a=Object.assign(document.createElement('a'),{href:url,download:name.replace(/[^a-z0-9_.-]/gi,'_')}); document.body.append(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
