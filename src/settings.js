@@ -229,7 +229,7 @@ async function loadUI() {
     const roles = $('#rmr_inject_role').empty();
     for (const [name, role] of Object.entries(extension_prompt_roles)) roles.append($('<option>').val(role).text(name[0] + name.slice(1).toLowerCase()));
     roles.val(settings.inject_role).off('change').on('change', async function () { settings.inject_role = Number(this.value); save(); await updateInjection(); });
-    $('#rmr_inject_prompt').off('change').on('change', async function () { settings.inject_prompt = this.value || INJECT_PROMPT; save(); await updateInjection(); });
+    $('#rmr_inject_prompt').off('change').on('change', async function () { settings.inject_prompt = this.value || INJECT_PROMPT; save(); presetUI(); await updateInjection(); });
     $('#rmr_memory_system_prompt').off('change').on('change', function () { settings.memory_system_prompt = this.value || SYSTEM_PROMPT; save(); presetUI(); });
     $('#rmr_memory_prompt_template').off('change').on('change', function () { settings.memory_prompt_template = this.value || USER_PROMPT; save(); presetUI(); });
     $('#rmr_chunk_system_prompt').off('change').on('change', function () { settings.chunk_system_prompt = this.value || CHUNK_SYSTEM_PROMPT; save(); presetUI(); });
@@ -426,7 +426,7 @@ const presetById = id => settings.summarize_presets.find(item => item.id === id)
 function presetUI() {
     const select = $('#rmr_summarize_preset'); select.find('option:not([value=""])').remove();
     const current = presetById(settings.current_summarize_preset);
-    const dirty = current && (current.systemPrompt !== settings.memory_system_prompt || current.userPrompt !== settings.memory_prompt_template || (current.chunkSystemPrompt != null && current.chunkSystemPrompt !== settings.chunk_system_prompt) || (current.chunkUserPrompt != null && current.chunkUserPrompt !== settings.chunk_prompt_template));
+    const dirty = current && (current.systemPrompt !== settings.memory_system_prompt || current.userPrompt !== settings.memory_prompt_template || (current.chunkSystemPrompt != null && current.chunkSystemPrompt !== settings.chunk_system_prompt) || (current.chunkUserPrompt != null && current.chunkUserPrompt !== settings.chunk_prompt_template) || (current.injectPrompt != null && current.injectPrompt !== settings.inject_prompt));
     for (const preset of settings.summarize_presets) select.append($('<option>').val(preset.id).text(preset.id === current?.id && dirty ? `${preset.name} *` : preset.name));
     select.val(settings.current_summarize_preset || '');
     $('#rmr_update_summarize_preset,#rmr_delete_summarize_preset,#rmr_export_summarize_preset').prop('disabled', !settings.current_summarize_preset);
@@ -436,10 +436,11 @@ function applyPreset(id) {
     settings.current_summarize_preset = id; settings.memory_system_prompt = preset.systemPrompt; settings.memory_prompt_template = preset.userPrompt;
     if (preset.chunkSystemPrompt != null) settings.chunk_system_prompt = preset.chunkSystemPrompt || CHUNK_SYSTEM_PROMPT;
     if (preset.chunkUserPrompt != null) settings.chunk_prompt_template = preset.chunkUserPrompt || CHUNK_USER_PROMPT;
+    if (preset.injectPrompt != null) { settings.inject_prompt = preset.injectPrompt || INJECT_PROMPT; updateInjection(); }
     if (preset.profile) settings.profile = preset.profile; settings.rate_limit = Number(preset.rateLimit) || 0; save();
-    $('#rmr_memory_system_prompt').val(settings.memory_system_prompt); $('#rmr_memory_prompt_template').val(settings.memory_prompt_template); $('#rmr_chunk_system_prompt').val(settings.chunk_system_prompt); $('#rmr_chunk_prompt_template').val(settings.chunk_prompt_template); $('#rmr_profile').val(settings.profile || ''); $('#rmr_rate_limit').val(settings.rate_limit);
+    $('#rmr_memory_system_prompt').val(settings.memory_system_prompt); $('#rmr_memory_prompt_template').val(settings.memory_prompt_template); $('#rmr_chunk_system_prompt').val(settings.chunk_system_prompt); $('#rmr_chunk_prompt_template').val(settings.chunk_prompt_template); $('#rmr_inject_prompt').val(settings.inject_prompt); $('#rmr_profile').val(settings.profile || ''); $('#rmr_rate_limit').val(settings.rate_limit);
 }
-function snapshot(name) { return { id: `preset-${Date.now()}-${Math.floor(Math.random()*1000)}`, name, systemPrompt: settings.memory_system_prompt, userPrompt: settings.memory_prompt_template, chunkSystemPrompt: settings.chunk_system_prompt, chunkUserPrompt: settings.chunk_prompt_template, profile: settings.profile, rateLimit: settings.rate_limit }; }
+function snapshot(name) { return { id: `preset-${Date.now()}-${Math.floor(Math.random()*1000)}`, name, systemPrompt: settings.memory_system_prompt, userPrompt: settings.memory_prompt_template, chunkSystemPrompt: settings.chunk_system_prompt, chunkUserPrompt: settings.chunk_prompt_template, injectPrompt: settings.inject_prompt, profile: settings.profile, rateLimit: settings.rate_limit }; }
 function bindPresets() {
     presetUI();
     $('#rmr_summarize_preset').off('change').on('change', function () { if (this.value) applyPreset(this.value); else { settings.current_summarize_preset = null; save(); } presetUI(); });

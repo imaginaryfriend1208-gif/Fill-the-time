@@ -119,7 +119,7 @@ Min/Max input tokens: a chunk never splits a message; it stops before the messag
             </div>
             <hr>
 
-            <h4 data-i18n="rmr_summarization_preset">Summarization Preset<span class="rmr-info-icon" data-tip="Save, update, delete, export, or import prompt presets. A preset stores the full prompt set: Merge System + User prompts and Chunk System + User prompts. Edit prompts below, then Save New." data-i18n-tip="rmr_info_preset"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6.7"/><path d="M8 7.2v4" stroke-linecap="round"/><circle cx="8" cy="4.9" r=".85" fill="currentColor" stroke="none"/></svg></span></h4>
+            <h4 data-i18n="rmr_summarization_preset">Summarization Preset<span class="rmr-info-icon" data-tip="Save, update, delete, export, or import prompt presets. A preset stores the full prompt set: Merge System + User prompts, Chunk System + User prompts, and the Injection prompt. Edit prompts below, then Save New." data-i18n-tip="rmr_info_preset"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6.7"/><path d="M8 7.2v4" stroke-linecap="round"/><circle cx="8" cy="4.9" r=".85" fill="currentColor" stroke="none"/></svg></span></h4>
             <div class="rmr-extension_block">
                 <select class="text_pole" id="rmr_summarize_preset"><option value="" data-i18n="rmr_custom_preset">-- Custom --</option></select>
                 <div class="preset-buttons">
@@ -129,7 +129,7 @@ Min/Max input tokens: a chunk never splits a message; it stops before the messag
                     <button type="button" class="menu_button" id="rmr_export_summarize_preset" data-i18n-title="rmr_preset_export" title="Export"><i class="fa-solid fa-file-export"></i></button>
                     <button type="button" class="menu_button" id="rmr_import_summarize_preset" data-i18n-title="rmr_preset_import" title="Import"><i class="fa-solid fa-file-import"></i></button>
                 </div>
-                <details class="rmr-preset-guide"><summary data-i18n="rmr_preset_guide_title">How to create a prompt preset</summary><p data-i18n="rmr_preset_guide_body">Edit the Merge and Chunk prompts below (keep {{previousSummary}} and {{content}} in the Merge User prompt, {{content}} in the Chunk User prompt), then choose Save New. One preset stores all four prompts. Update overwrites the selected preset; Export and Import share presets as JSON.</p></details>
+                <details class="rmr-preset-guide"><summary data-i18n="rmr_preset_guide_title">How to create a prompt preset</summary><p data-i18n="rmr_preset_guide_body">Edit the Merge and Chunk prompts below (keep {{previousSummary}} and {{content}} in the Merge User prompt, {{content}} in the Chunk User prompt) and the Injection prompt, then choose Save New. One preset stores all five prompts. Update overwrites the selected preset; Export and Import share presets as JSON.</p></details>
             </div>
             <hr>
 
