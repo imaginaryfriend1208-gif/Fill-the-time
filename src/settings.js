@@ -82,13 +82,13 @@ const defaults = {
     use_chunk_summaries_as_chapter: false, archive_on_accept: true,
     auto_stock_chunks: false, stock_profile: null, stock_context_limit: 0,
     chunk_input_min_tokens: 0, chunk_input_max_tokens: 0,
-    merge_max_tokens: 0, chunk_max_tokens: 0, merge_continuations: 2,
+    merge_max_tokens: 0, merge_continuations: 2,
     chunk_system_prompt: CHUNK_SYSTEM_PROMPT, chunk_prompt_template: CHUNK_USER_PROMPT,
     summarize_presets: [DEFAULT_PRESET, WRITER_DIARY_PRESET, CHARACTER_DIARY_PRESET], current_summarize_preset: DEFAULT_PRESET.id,
     inject_enabled: false, inject_depth: 0, inject_role: extension_prompt_roles.SYSTEM,
     inject_prompt: INJECT_PROMPT, rolling_settings_migrated: true, locale_override: 'auto',
 };
-const obsolete = ['tools_enabled','quick_reply_buttons_location','quick_reply_buttons_enabled','loading_screen_enabled','chapter_query_system_prompt','chapter_query_prompt_template','timeline_fill_system_prompt','timeline_fill_prompt_template','query_chapter_limit','timeline_fill_query_limit','query_profile','timeline_fill_profile','query_presets','current_query_preset','timeline_fill_presets','current_timeline_fill_preset','agentic_timeline_fill_enabled','agentic_timeline_fill_profile','agentic_timeline_fill_prompt','chapter_end_mode','scene_end_mode','hide_scene','auto_accept_end','merge_use_stock','merge_ignore_previous','use_archive_as_regen_base','stock_during_merge','use_custom_chunk_prompts','add_chunk_summaries'];
+const obsolete = ['tools_enabled','quick_reply_buttons_location','quick_reply_buttons_enabled','loading_screen_enabled','chapter_query_system_prompt','chapter_query_prompt_template','timeline_fill_system_prompt','timeline_fill_prompt_template','query_chapter_limit','timeline_fill_query_limit','query_profile','timeline_fill_profile','query_presets','current_query_preset','timeline_fill_presets','current_timeline_fill_preset','agentic_timeline_fill_enabled','agentic_timeline_fill_profile','agentic_timeline_fill_prompt','chapter_end_mode','scene_end_mode','hide_scene','auto_accept_end','merge_use_stock','merge_ignore_previous','use_archive_as_regen_base','stock_during_merge','use_custom_chunk_prompts','add_chunk_summaries','chunk_max_tokens'];
 const clone = value => JSON.parse(JSON.stringify(value));
 const escapeHtml = text => $('<div>').text(String(text ?? '')).html();
 const save = () => getContext().saveSettingsDebounced();
@@ -215,7 +215,7 @@ async function loadUI() {
         } finally { button.prop('disabled', false); }
     });
     $('#rmr_rate_limit').val(settings.rate_limit).off('change').on('change', function () { settings.rate_limit = Math.max(0, Number(this.value) || 0); this.value = settings.rate_limit; save(); });
-    for (const [id, key] of [['#rmr_merge_max_tokens', 'merge_max_tokens'], ['#rmr_chunk_max_tokens', 'chunk_max_tokens'], ['#rmr_merge_continuations', 'merge_continuations']]) {
+    for (const [id, key] of [['#rmr_merge_max_tokens', 'merge_max_tokens'], ['#rmr_merge_continuations', 'merge_continuations']]) {
         $(id).val(settings[key] || (key === 'merge_continuations' ? 0 : '')).off('change').on('change', function () { settings[key] = Math.max(0, Math.floor(Number(this.value) || 0)); this.value = settings[key] || (key === 'merge_continuations' ? 0 : ''); save(); });
     }
     populateProfiles(); $('#rmr_profile').off('change').on('change', function () { settings.profile = this.value || null; save(); });

@@ -280,7 +280,7 @@ check('v4-routing', 'no silent fallback to the chat API',
 check('v4-routing', 'finish_reason is read from the raw response',
     /extractData:\s*false/.test(memories) && /function extractFinishReason/.test(memories));
 check('v4-routing', 'per-pass max tokens are honoured',
-    /settings\.merge_max_tokens/.test(memories) && /settings\.chunk_max_tokens/.test(memories) && /merge_max_tokens/.test(settingsJs));
+    /settings\.merge_max_tokens/.test(memories) && !/chunk_max_tokens/.test(memories) && /merge_max_tokens/.test(settingsJs));
 check('v4-routing', 'truncated merges are continued, never auto-accepted',
     /CONTINUATION_PROMPT/.test(memories) && /lastGenerationTruncated/.test(memories.match(/export async function endChapterSilent[\s\S]*?\n\}/)?.[0] || ''),
     'a cut-off summary must go to review instead of overwriting the active summary');
@@ -304,7 +304,7 @@ const REQUIRED_KEYS = [
     'rmr_merge_profile', 'rmr_chunk_profile',
     'rmr_archive_hide', 'rmr_archive_show', 'rmr_archive_clear_all', 'rmr_archive_hidden_note',
     'rmr_archive_clear_confirm', 'rmr_stock_delete_all', 'rmr_stock_delete_merged',
-    'rmr_merge_max_tokens', 'rmr_chunk_max_tokens', 'rmr_merge_continuations',
+    'rmr_merge_max_tokens', 'rmr_merge_continuations',
     'rmr_chunk_input_min_tokens', 'rmr_chunk_input_max_tokens',
 ];
 for (const locale of ['vi-vn', 'fr-fr']) {

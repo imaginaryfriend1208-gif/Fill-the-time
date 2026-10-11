@@ -790,7 +790,8 @@ async function generateFromText(content, chunk = 0, includePrevious = true, prev
         const messages = [];
         if (systemPrompt.trim()) messages.push({ role: 'system', content: systemPrompt });
         messages.push({ role: 'user', content: userPrompt });
-        const configuredMax = Number(isChunkPass ? settings.chunk_max_tokens : settings.merge_max_tokens) || 0;
+        // Chunk digests always use the chunk profile's preset Response Length.
+        const configuredMax = isChunkPass ? 0 : Number(settings.merge_max_tokens) || 0;
         const maxTokens = configuredMax > 0 ? configuredMax : await getMaxTokensForProfile(profileId);
         const override = buildOverridePayload(profileId, maxTokens);
         const effort = getReasoningEffort(profileId);
@@ -817,7 +818,7 @@ async function generateFromText(content, chunk = 0, includePrevious = true, prev
         if (response.finishReason === 'length') {
             lastGenerationTruncated = true;
             rawWarn(isChunkPass
-                ? 'A chunk digest was cut off by the output limit. Raise "Chunk max output tokens" in Summarization Connection.'
+                ? 'A chunk digest was cut off by the output limit. Raise Response Length in the preset of the chunk profile.'
                 : `The summary was still cut off after ${rounds} continuation${rounds === 1 ? '' : 's'}. Review it before accepting, or raise "Merge max output tokens".`);
         } else lastGenerationTruncated = false;
         return text;

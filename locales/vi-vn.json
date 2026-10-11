@@ -156,6 +156,5 @@
   "rmr_restore_latest": "Khôi phục bản mới nhất",
   "rmr_create_empty": "Tạo bản trống",
   "rmr_merge_max_tokens": "Số token output tối đa khi merge (0 = theo Response Length của preset)",
-  "rmr_chunk_max_tokens": "Số token output tối đa khi chunk (0 = theo Response Length của preset)",
   "rmr_merge_continuations": "Tự nối tiếp merge bị cắt tối đa N lần"
 }

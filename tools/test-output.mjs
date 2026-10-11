@@ -40,7 +40,7 @@ let m; try { m = await import(pathToFileURL(tmp).href); } finally { unlinkSync(t
 
 let fail = 0; const t = (n, c, got) => { if (!c) fail++; console.log(`${c ? 'pass' : 'FAIL'}  ${n}${c ? '' : `\n        got: ${JSON.stringify(got)}`}`); };
 const oai = (content, finish = 'stop') => ({ choices: [{ message: { content }, finish_reason: finish }] });
-const base = { memory_system_prompt: 'S', memory_prompt_template: 'M[{{previousSummary}}]{{content}}', chunk_system_prompt: 'CS', chunk_prompt_template: 'C{{content}}', merge_max_tokens: 0, chunk_max_tokens: 0, merge_continuations: 2 };
+const base = { memory_system_prompt: 'S', memory_prompt_template: 'M[{{previousSummary}}]{{content}}', chunk_system_prompt: 'CS', chunk_prompt_template: 'C{{content}}', merge_max_tokens: 0, merge_continuations: 2 };
 
 console.log('-- extractFinishReason --');
 t('openai length', m.extractFinishReason(oai('x', 'length')) === 'length');
@@ -71,12 +71,12 @@ t('passes extractData:false so finish_reason survives', m.calls[0].custom.extrac
 t('returns {content, finishReason}', r.content === 'ok' && r.finishReason === 'stop', r);
 
 console.log('-- generateFromText: max tokens per pass --');
-m.__set({ ...base, merge_max_tokens: 9000, chunk_max_tokens: 700 }, 'OLD', [oai('m')]);
+m.__set({ ...base, merge_max_tokens: 9000 }, 'OLD', [oai('m')]);
 await m.generateFromText('body', 0, true, null, {});
 t('merge uses merge_max_tokens', m.calls[0].maxTokens === 9000 && m.calls[0].profileId === 'MERGE', m.calls[0]);
 m.__set({ ...base, merge_max_tokens: 9000, chunk_max_tokens: 700 }, 'OLD', [oai('c')]);
 await m.generateFromText('body', 0, false, null, {});
-t('chunk uses chunk_max_tokens + chunk prompt (toggle gone)', m.calls[0].maxTokens === 700 && m.calls[0].profileId === 'CHUNK' && m.calls[0].last.content === 'Cbody', m.calls[0]);
+t('chunk ignores merge/legacy limits, uses preset max + chunk prompt', m.calls[0].maxTokens === 2048 && m.calls[0].profileId === 'CHUNK' && m.calls[0].last.content === 'Cbody', m.calls[0]);
 m.__set(base, 'OLD', [oai('m')]);
 await m.generateFromText('body', 0, true, null, {});
 t('0 -> falls back to preset max (2048)', m.calls[0].maxTokens === 2048, m.calls[0]);

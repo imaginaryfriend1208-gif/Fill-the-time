@@ -156,6 +156,5 @@
   "rmr_restore_latest": "Restaurer la dernière",
   "rmr_create_empty": "Créer un résumé vide",
   "rmr_merge_max_tokens": "Tokens de sortie max pour la fusion (0 = Response Length du preset)",
-  "rmr_chunk_max_tokens": "Tokens de sortie max par chunk (0 = Response Length du preset)",
   "rmr_merge_continuations": "Poursuivre une fusion tronquée jusqu’à N fois"
 }
