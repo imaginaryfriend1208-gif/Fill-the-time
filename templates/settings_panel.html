@@ -7,6 +7,7 @@
         <div class="inline-drawer-content">
             <div class="rmr-toolbar">
                 <label class="rmr-language-control" for="rmr_language_select"><i class="fa-solid fa-language"></i><span data-i18n="rmr_language">Language</span><select id="rmr_language_select" class="text_pole widthNatural"></select></label>
+                <button type="button" class="menu_button rmr-update-button" id="rmr_update_extension" hidden data-i18n-title="rmr_update_title" title="A new version is available. Click to update from git."><i class="fa-solid fa-cloud-arrow-down"></i><span data-i18n="rmr_update_button">Update</span></button>
                 <button type="button" class="menu_button" id="rmr_open_help" data-i18n-title="rmr_help" title="Help"><i class="fa-solid fa-circle-question"></i></button>
             </div>
             <h4 data-i18n="rmr_general">General<span class="rmr-info-icon" data-tip="Export/Import your extension settings as JSON. Start Tutorial walks you through every feature step by step." data-i18n-tip="rmr_info_general"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6.7"/><path d="M8 7.2v4" stroke-linecap="round"/><circle cx="8" cy="4.9" r=".85" fill="currentColor" stroke="none"/></svg></span></h4>
@@ -118,23 +119,26 @@ Min/Max input tokens: a chunk never splits a message; it stops before the messag
             </div>
             <hr>
 
-            <h4 data-i18n="rmr_summarization_preset">Summarization Preset<span class="rmr-info-icon" data-tip="Save, update, delete, export, or import prompt presets. A preset stores the full prompt set: Merge System + User prompts, Chunk System + User prompts, and the Injection prompt. Edit prompts below, then Save New." data-i18n-tip="rmr_info_preset"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6.7"/><path d="M8 7.2v4" stroke-linecap="round"/><circle cx="8" cy="4.9" r=".85" fill="currentColor" stroke="none"/></svg></span></h4>
-            <div class="rmr-extension_block">
-                <select class="text_pole" id="rmr_summarize_preset"><option value="" data-i18n="rmr_custom_preset">-- Custom --</option></select>
-                <div class="preset-buttons">
-                    <button type="button" class="menu_button" id="rmr_save_summarize_preset" data-i18n-title="rmr_preset_save_new" title="Save New"><i class="fa-solid fa-file-circle-plus"></i></button>
-                    <button type="button" class="menu_button" id="rmr_update_summarize_preset" data-i18n-title="rmr_preset_update" title="Update"><i class="fa-solid fa-save"></i></button>
-                    <button type="button" class="menu_button" id="rmr_delete_summarize_preset" data-i18n-title="rmr_preset_delete" title="Delete"><i class="fa-solid fa-trash-can"></i></button>
-                    <button type="button" class="menu_button" id="rmr_export_summarize_preset" data-i18n-title="rmr_preset_export" title="Export"><i class="fa-solid fa-file-export"></i></button>
-                    <button type="button" class="menu_button" id="rmr_import_summarize_preset" data-i18n-title="rmr_preset_import" title="Import"><i class="fa-solid fa-file-import"></i></button>
+            <h4 data-i18n="rmr_summarization_preset">Prompt Preset<span class="rmr-info-icon" data-tip="A preset is one set of five prompts: Merge System + User, Chunk System + User, and the Injection prompt. Pick a preset, edit any tab, then press Save. A dot on a tab marks unsaved edits. Macros: {{previousSummary}}, {{content}}, {{worldInfo}}, plus character card macros." data-i18n-tip="rmr_info_preset"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6.7"/><path d="M8 7.2v4" stroke-linecap="round"/><circle cx="8" cy="4.9" r=".85" fill="currentColor" stroke="none"/></svg></span></h4>
+            <div class="rmr-extension_block rmr-preset-panel">
+                <div class="rmr-preset-bar">
+                    <select class="text_pole" id="rmr_summarize_preset"><option value="" data-i18n="rmr_custom_preset">-- Custom --</option></select>
+                    <span id="rmr_preset_status" class="rmr-preset-status"></span>
                 </div>
-                <details class="rmr-preset-guide"><summary data-i18n="rmr_preset_guide_title">How to create a prompt preset</summary><p data-i18n="rmr_preset_guide_body">Edit the Merge and Chunk prompts below (keep {{previousSummary}} and {{content}} in the Merge User prompt, {{content}} in the Chunk User prompt) and the Injection prompt, then choose Save New. One preset stores all five prompts. Update overwrites the selected preset; Export and Import share presets as JSON.</p></details>
-            </div>
-            <hr>
-
-            <h4 data-i18n="rmr_summarization_prompts">Summarization Prompts<span class="rmr-info-icon" data-tip="Merge Prompt combines the previous summary with new events into the final chapter. Chunk Prompt digests individual chunks before merging (used when 'Use separate chunk prompts' is on). Macros: {{previousSummary}}, {{content}}, {{worldInfo}}, plus character card macros." data-i18n-tip="rmr_info_prompts"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6.7"/><path d="M8 7.2v4" stroke-linecap="round"/><circle cx="8" cy="4.9" r=".85" fill="currentColor" stroke="none"/></svg></span></h4>
-            <div class="rmr-extension_block flex-container flexFlowColumn">
-                <div class="rmr-prompt-card">
+                <div class="rmr-preset-actions">
+                    <button type="button" class="menu_button rmr-preset-save" id="rmr_update_summarize_preset" data-i18n-title="rmr_preset_save_title" title="Save the edits into the selected preset"><i class="fa-solid fa-floppy-disk"></i><span data-i18n="rmr_preset_save">Save</span></button>
+                    <button type="button" class="menu_button" id="rmr_save_summarize_preset" data-i18n-title="rmr_preset_save_new" title="Save as new preset"><i class="fa-solid fa-file-circle-plus"></i><span data-i18n="rmr_preset_save_as">Save as new</span></button>
+                    <span class="rmr-preset-actions-gap"></span>
+                    <button type="button" class="menu_button" id="rmr_import_summarize_preset" data-i18n-title="rmr_preset_import" title="Import"><i class="fa-solid fa-file-import"></i><span data-i18n="rmr_preset_import">Import</span></button>
+                    <button type="button" class="menu_button" id="rmr_export_summarize_preset" data-i18n-title="rmr_preset_export" title="Export"><i class="fa-solid fa-file-export"></i><span data-i18n="rmr_preset_export">Export</span></button>
+                    <button type="button" class="menu_button rmr-preset-delete" id="rmr_delete_summarize_preset" data-i18n-title="rmr_preset_delete" title="Delete"><i class="fa-solid fa-trash-can"></i></button>
+                </div>
+                <div class="rmr-prompt-tabs" role="tablist">
+                    <button type="button" class="rmr-prompt-tab active" role="tab" data-rmr-tab="merge"><i class="fa-solid fa-object-group"></i><span data-i18n="rmr_tab_merge">Merge</span><span class="rmr-tab-dot"></span></button>
+                    <button type="button" class="rmr-prompt-tab" role="tab" data-rmr-tab="chunk"><i class="fa-solid fa-cubes"></i><span data-i18n="rmr_tab_chunk">Chunk</span><span class="rmr-tab-dot"></span></button>
+                    <button type="button" class="rmr-prompt-tab" role="tab" data-rmr-tab="inject"><i class="fa-solid fa-syringe"></i><span data-i18n="rmr_tab_inject">Inject</span><span class="rmr-tab-dot"></span></button>
+                </div>
+                <div class="rmr-prompt-card" role="tabpanel" data-rmr-panel="merge">
                     <div class="rmr-prompt-card-header">
                         <i class="fa-solid fa-object-group"></i>
                         <span data-i18n="rmr_merge_prompts">Merge Prompt (final rolling summary)</span>
@@ -145,7 +149,7 @@ Min/Max input tokens: a chunk never splits a message; it stops before the messag
                     <label for="rmr_memory_prompt_template"><small data-i18n="rmr_user_prompt">User Prompt</small></label>
                     <textarea rows="8" class="margin0 text_pole textarea_compact" id="rmr_memory_prompt_template"></textarea>
                 </div>
-                <div class="rmr-prompt-card">
+                <div class="rmr-prompt-card" role="tabpanel" data-rmr-panel="chunk" hidden>
                     <div class="rmr-prompt-card-header">
                         <i class="fa-solid fa-cubes"></i>
                         <span data-i18n="rmr_chunk_prompts">Chunk Prompt (per-chunk digests &amp; stocking)</span>
@@ -153,10 +157,19 @@ Min/Max input tokens: a chunk never splits a message; it stops before the messag
                     <p class="rmr-prompt-card-hint"><small data-i18n="rmr_chunk_prompts_hint">Condenses each chunk (including background stocking) before the merge. Always used for chunk passes. Macros: {{content}}, {{worldInfo}}.</small></p>
                     <div id="rmr_chunk_prompt_fields">
                         <label for="rmr_chunk_system_prompt"><small data-i18n="rmr_system_prompt">System Prompt</small></label>
-                        <textarea rows="4" class="margin0 text_pole textarea_compact" id="rmr_chunk_system_prompt"></textarea>
+                        <textarea rows="5" class="margin0 text_pole textarea_compact" id="rmr_chunk_system_prompt"></textarea>
                         <label for="rmr_chunk_prompt_template"><small data-i18n="rmr_user_prompt">User Prompt</small></label>
-                        <textarea rows="6" class="margin0 text_pole textarea_compact" id="rmr_chunk_prompt_template"></textarea>
+                        <textarea rows="8" class="margin0 text_pole textarea_compact" id="rmr_chunk_prompt_template"></textarea>
                     </div>
+                </div>
+                <div class="rmr-prompt-card" role="tabpanel" data-rmr-panel="inject" hidden>
+                    <div class="rmr-prompt-card-header">
+                        <i class="fa-solid fa-syringe"></i>
+                        <span data-i18n="rmr_inject_prompt_title">Injection Prompt</span>
+                    </div>
+                    <p class="rmr-prompt-card-hint"><small data-i18n="rmr_inject_prompt">Injection Prompt — supports {{fillthetime}}, {{lastMessageId}}, {{firstIncludedMessageId}}</small></p>
+                    <textarea rows="8" class="margin0 text_pole textarea_compact" id="rmr_inject_prompt"></textarea>
+                    <p class="rmr-prompt-card-hint"><small data-i18n="rmr_inject_prompt_where">Only used when automatic injection is enabled in "Optional Inject at Depth" below.</small></p>
                 </div>
             </div>
             <hr>
@@ -181,8 +194,7 @@ Macros: {{fillthetime}}, {{lastMessageId}}, {{firstIncludedMessageId}}." data-i1
                     <div class="flexFlowColumn rmr-field"><label for="rmr_inject_depth"><small data-i18n="rmr_inject_depth">Depth</small></label><input class="text_pole" id="rmr_inject_depth" type="number" min="0" max="999"></div>
                     <div class="flexFlowColumn rmr-field"><label for="rmr_inject_role"><small data-i18n="rmr_inject_role">Role</small></label><select class="text_pole" id="rmr_inject_role"></select></div>
                 </div>
-                <label for="rmr_inject_prompt"><small data-i18n="rmr_inject_prompt">Injection Prompt — supports {{fillthetime}}, {{lastMessageId}}, {{firstIncludedMessageId}}</small></label>
-                <textarea rows="7" class="margin0 text_pole textarea_compact" id="rmr_inject_prompt"></textarea>
+                <p class="rmr-prompt-card-hint"><small data-i18n="rmr_inject_prompt_moved">Edit the injection prompt in the Inject tab of Prompt Preset above.</small></p>
             </div>
         </div>
     </div>

@@ -8,7 +8,7 @@ import { emptyChunk } from './summary-state.js';
 import { notify } from './notify.js';
 import { ConnectionManagerRequestService } from '../../../shared.js';
 import { amount_gen, main_api, setExtensionPrompt, extension_prompt_types, extension_prompt_roles, eventSource, event_types } from '../../../../../script.js';
-import { oai_settings, openai_settings, chat_completion_sources, reasoning_effort_types } from '../../../../../scripts/openai.js';
+import { oai_settings, chat_completion_sources, reasoning_effort_types } from '../../../../../scripts/openai.js';
 import { getPresetManager } from '../../../../../scripts/preset-manager.js';
 import { createChatBackup } from './backup.js';
 
@@ -382,19 +382,19 @@ export function resolveChunkProfileId(explicit = null) {
     return resolveConnectionProfileId(explicit, settings?.stock_profile, settings?.profile);
 }
 
+const isChatProfile = profile => CHAT_APIS.includes(profile?.api) || profile?.api === 'openai';
+/** The generation preset a Connection Manager profile points to, looked up by name the same way ST does when sending. */
+function getProfilePreset(profile) {
+    if (!profile?.preset) return null;
+    try { return getPresetManager(isChatProfile(profile) ? 'openai' : profile.api)?.getCompletionPresetByName(profile.preset) || null; }
+    catch (error) { debug('Preset lookup failed:', error); return null; }
+}
+
 export function getReasoningEffort(profileId) {
     try {
         const profile = profiles().find(item => item.id === profileId);
         if (!profile) return oai_settings.reasoning_effort;
-        let effort = null;
-        if (profile.preset) {
-            const api = CHAT_APIS.includes(profile.api) || profile.api === 'openai' ? 'openai' : profile.api;
-            const manager = getPresetManager(api);
-            if (api === 'openai' && manager) {
-                const index = manager.getAllPresets().indexOf(profile.preset);
-                effort = index >= 0 ? openai_settings[index]?.reasoning_effort : null;
-            }
-        }
+        let effort = isChatProfile(profile) ? getProfilePreset(profile)?.reasoning_effort : null;
         effort ||= oai_settings.reasoning_effort;
         const source = ({ openai: chat_completion_sources.OPENAI, custom: chat_completion_sources.CUSTOM, xai: chat_completion_sources.XAI, aimlapi: chat_completion_sources.AIMLAPI, openrouter: chat_completion_sources.OPENROUTER, pollinations: chat_completion_sources.POLLINATIONS, perplexity: chat_completion_sources.PERPLEXITY })[profile.api] || profile.api;
         const mapped = [chat_completion_sources.OPENAI, chat_completion_sources.CUSTOM, chat_completion_sources.XAI, chat_completion_sources.AIMLAPI, chat_completion_sources.OPENROUTER, chat_completion_sources.POLLINATIONS, chat_completion_sources.PERPLEXITY, chat_completion_sources.COMETAPI];
@@ -412,18 +412,11 @@ export function getIncludeReasoning(profileId) {
 
 export async function getMaxTokensForProfile(profileId) {
     if (!profileId || profileId === 'current') return ['openai', 'openrouter', 'claude'].includes(main_api) ? (oai_settings.openai_max_tokens || amount_gen || 2048) : (amount_gen || 2048);
-    try {
-        const profile = profiles().find(item => item.id === profileId);
-        if (!profile?.preset) return amount_gen || 2048;
-        const api = CHAT_APIS.includes(profile.api) || profile.api === 'openai' ? 'openai' : profile.api;
-        const manager = getPresetManager(api);
-        let preset = null;
-        if (api === 'openai' && manager) {
-            const index = manager.getAllPresets().indexOf(profile.preset);
-            preset = index >= 0 ? openai_settings[index] : null;
-        } else preset = manager?.getPresetSettings(profile.preset);
-        return preset?.openai_max_tokens || preset?.max_tokens || preset?.max_length || preset?.genamt || amount_gen || 2048;
-    } catch (error) { debug('Max-token lookup failed:', error); return amount_gen || 2048; }
+    const profile = profiles().find(item => item.id === profileId);
+    // Without a preset ST sends the profile with the current settings, so fall back to the matching Response Length.
+    const fallback = isChatProfile(profile) ? (oai_settings.openai_max_tokens || 2048) : (amount_gen || 2048);
+    const preset = getProfilePreset(profile);
+    return Number(preset?.openai_max_tokens || preset?.max_tokens || preset?.max_length || preset?.genamt) || fallback;
 }
 
 export function buildOverridePayload(profileId, maxTokens) {
@@ -818,7 +811,7 @@ async function generateFromText(content, chunk = 0, includePrevious = true, prev
         if (response.finishReason === 'length') {
             lastGenerationTruncated = true;
             rawWarn(isChunkPass
-                ? 'A chunk digest was cut off by the output limit. Raise Response Length in the preset of the chunk profile.'
+                ? `A chunk digest was cut off by the output limit (${maxTokens} tokens). Raise Response Length in the preset of the chunk profile. Reasoning models also spend this budget on thinking.`
                 : `The summary was still cut off after ${rounds} continuation${rounds === 1 ? '' : 's'}. Review it before accepting, or raise "Merge max output tokens".`);
         } else lastGenerationTruncated = false;
         return text;

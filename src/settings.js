@@ -1,6 +1,6 @@
-import { extension_settings, getContext } from '../../../../extensions.js';
-import { extension_prompt_roles } from '../../../../../script.js';
-import { extension_name, getExtensionAssetPath } from '../index.js';
+import { extension_settings, extensionTypes, getContext } from '../../../../extensions.js';
+import { extension_prompt_roles, getRequestHeaders } from '../../../../../script.js';
+import { extension_name, extension_path, getExtensionAssetPath } from '../index.js';
 import { resetMessageButtons } from './messages.js';
 import { debug } from './logging.js';
 import { initTutorialUI, refreshTutorialLocale } from './tutorial.js';
@@ -138,8 +138,61 @@ async function loadVersionBadge() {
         const response = await fetch(getExtensionAssetPath('manifest.json'));
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const version = String((await response.json()).version || '').trim();
-        $('#rmr_version_badge').text(version ? `v${version}` : '').prop('hidden', !version);
-    } catch (error) { debug('Could not load extension version:', error); $('#rmr_version_badge').prop('hidden', true); }
+        versionLabel = version ? `v${version}` : '';
+    } catch (error) { debug('Could not load extension version:', error); versionLabel = ''; }
+    renderUpdateState();
+}
+let versionLabel = '';
+let updateAvailable = false;
+let updating = false;
+/** Body for ST's /api/extensions endpoints: the install folder name and whether it is a global extension. */
+function extensionRequestBody() {
+    const extensionName = decodeURIComponent(extension_path.split('/').pop() || '');
+    return { extensionName, global: extensionTypes[`third-party/${extensionName}`] === 'global' };
+}
+function renderUpdateState() {
+    const badge = $('#rmr_version_badge');
+    badge.toggleClass('rmr-update-available', updateAvailable)
+        .text(updateAvailable ? getText('rmr_update_badge', 'Update') : versionLabel)
+        .attr('title', updateAvailable ? getText('rmr_update_title', 'A new version is available. Click to update from git.') : null)
+        .attr('role', updateAvailable ? 'button' : null).attr('tabindex', updateAvailable ? '0' : null)
+        .prop('hidden', !updateAvailable && !versionLabel);
+    $('#rmr_update_extension').prop('hidden', !updateAvailable);
+}
+async function checkForUpdate() {
+    try {
+        const response = await fetch('/api/extensions/version', { method: 'POST', headers: getRequestHeaders(), body: JSON.stringify(extensionRequestBody()) });
+        if (!response.ok) throw new Error(await response.text() || `HTTP ${response.status}`);
+        updateAvailable = (await response.json()).isUpToDate === false;
+    } catch (error) { debug('Update check failed:', error); updateAvailable = false; }
+    renderUpdateState();
+}
+/** Pull the latest commit through ST's extension updater, then reload so the new code runs. */
+async function updateExtension() {
+    if (updating || !confirm(getText('rmr_update_confirm', 'Update IF Memory from git now? The page reloads when it finishes.'))) return;
+    updating = true;
+    $('#rmr_update_extension,#rmr_version_badge').addClass('rmr-updating');
+    toastr.info(getText('rmr_update_running', 'Updating IF Memory...'), 'IF Memory');
+    try {
+        const response = await fetch('/api/extensions/update', { method: 'POST', headers: getRequestHeaders(), body: JSON.stringify(extensionRequestBody()) });
+        if (!response.ok) throw new Error(await response.text() || `HTTP ${response.status}`);
+        const { shortCommitHash } = await response.json();
+        toastr.success(`${getText('rmr_update_done', 'Updated. Reloading...')} ${shortCommitHash || ''}`.trim(), 'IF Memory');
+        setTimeout(() => location.reload(), 1200);
+    } catch (error) {
+        updating = false;
+        $('#rmr_update_extension,#rmr_version_badge').removeClass('rmr-updating');
+        toastr.error(`${getText('rmr_update_failed', 'Update failed:')} ${error.message || error}`, 'IF Memory');
+    }
+}
+function bindUpdate() {
+    // The badge sits inside the drawer header, so stop the click from toggling the drawer.
+    $('#rmr_version_badge').off('click keydown').on('click keydown', function (event) {
+        if (!updateAvailable || (event.type === 'keydown' && !['Enter', ' '].includes(event.key))) return;
+        event.preventDefault(); event.stopPropagation(); updateExtension();
+    });
+    $('#rmr_update_extension').off('click').on('click', updateExtension);
+    checkForUpdate();
 }
 async function changeLocale(value) {
     settings.locale_override = value || 'auto';
@@ -148,6 +201,8 @@ async function changeLocale(value) {
     applyExtensionLocale($('#rmr_settings_root'));
     await renderActiveSummary();
     await renderArchiveList();
+    presetStatus();
+    renderUpdateState();
     refreshTutorialLocale();
 }
 function initInfoTooltips() {
@@ -175,6 +230,7 @@ async function loadUI() {
     applyExtensionLocale($('#rmr_settings_root'));
     initInfoTooltips();
     await loadVersionBadge();
+    bindUpdate();
     const localeSelect = $('#rmr_language_select').empty();
     for (const locale of getAvailableLocales()) localeSelect.append($('<option>').val(locale.code).text(locale.name));
     localeSelect.val(settings.locale_override || 'auto').off('change').on('change', function () { changeLocale(this.value); });
@@ -229,11 +285,11 @@ async function loadUI() {
     const roles = $('#rmr_inject_role').empty();
     for (const [name, role] of Object.entries(extension_prompt_roles)) roles.append($('<option>').val(role).text(name[0] + name.slice(1).toLowerCase()));
     roles.val(settings.inject_role).off('change').on('change', async function () { settings.inject_role = Number(this.value); save(); await updateInjection(); });
-    $('#rmr_inject_prompt').off('change').on('change', async function () { settings.inject_prompt = this.value || INJECT_PROMPT; save(); presetUI(); await updateInjection(); });
-    $('#rmr_memory_system_prompt').off('change').on('change', function () { settings.memory_system_prompt = this.value || SYSTEM_PROMPT; save(); presetUI(); });
-    $('#rmr_memory_prompt_template').off('change').on('change', function () { settings.memory_prompt_template = this.value || USER_PROMPT; save(); presetUI(); });
-    $('#rmr_chunk_system_prompt').off('change').on('change', function () { settings.chunk_system_prompt = this.value || CHUNK_SYSTEM_PROMPT; save(); presetUI(); });
-    $('#rmr_chunk_prompt_template').off('change').on('change', function () { settings.chunk_prompt_template = this.value || CHUNK_USER_PROMPT; save(); presetUI(); });
+    // 'input' keeps the preset status and tab dots live while typing; saves are debounced.
+    $('#rmr_inject_prompt').off('input change').on('input change', async function () { settings.inject_prompt = this.value || INJECT_PROMPT; save(); presetStatus(); await updateInjection(); });
+    for (const [id, key, fallback] of [['#rmr_memory_system_prompt', 'memory_system_prompt', SYSTEM_PROMPT], ['#rmr_memory_prompt_template', 'memory_prompt_template', USER_PROMPT], ['#rmr_chunk_system_prompt', 'chunk_system_prompt', CHUNK_SYSTEM_PROMPT], ['#rmr_chunk_prompt_template', 'chunk_prompt_template', CHUNK_USER_PROMPT]]) {
+        $(id).off('input change').on('input change', function () { settings[key] = this.value || fallback; save(); presetStatus(); });
+    }
     $('#rmr_create_chapter').off('click').on('click', async function () {
         const button = $(this);
         if (button.prop('disabled')) return;
@@ -423,13 +479,34 @@ export async function renderPendingCheckpoint() {
 }
 
 const presetById = id => settings.summarize_presets.find(item => item.id === id);
+/** Which tabs differ from the selected preset. Older presets without chunk/inject prompts never flag those tabs. */
+function presetDirtyTabs(preset = presetById(settings.current_summarize_preset)) {
+    if (!preset) return { merge: false, chunk: false, inject: false };
+    return {
+        merge: preset.systemPrompt !== settings.memory_system_prompt || preset.userPrompt !== settings.memory_prompt_template,
+        chunk: (preset.chunkSystemPrompt != null && preset.chunkSystemPrompt !== settings.chunk_system_prompt) || (preset.chunkUserPrompt != null && preset.chunkUserPrompt !== settings.chunk_prompt_template),
+        inject: preset.injectPrompt != null && preset.injectPrompt !== settings.inject_prompt,
+    };
+}
+const isPresetDirty = () => Object.values(presetDirtyTabs()).some(Boolean);
+function presetStatus() {
+    const current = presetById(settings.current_summarize_preset);
+    const tabs = presetDirtyTabs(current);
+    const dirty = Object.values(tabs).some(Boolean);
+    for (const [tab, changed] of Object.entries(tabs)) $(`.rmr-prompt-tab[data-rmr-tab="${tab}"]`).toggleClass('rmr-tab-dirty', changed);
+    if (current) $('#rmr_summarize_preset option').filter((_, option) => option.value === current.id).text(dirty ? `${current.name} *` : current.name);
+    const [state, text] = !current ? ['custom', getText('rmr_preset_status_custom', 'Not saved as a preset')]
+        : dirty ? ['dirty', getText('rmr_preset_status_dirty', 'Unsaved changes')]
+        : ['saved', getText('rmr_preset_status_saved', 'Saved')];
+    $('#rmr_preset_status').attr('data-state', state).text(text);
+    $('#rmr_update_summarize_preset').toggleClass('rmr-preset-save-pending', !current || dirty);
+}
 function presetUI() {
     const select = $('#rmr_summarize_preset'); select.find('option:not([value=""])').remove();
-    const current = presetById(settings.current_summarize_preset);
-    const dirty = current && (current.systemPrompt !== settings.memory_system_prompt || current.userPrompt !== settings.memory_prompt_template || (current.chunkSystemPrompt != null && current.chunkSystemPrompt !== settings.chunk_system_prompt) || (current.chunkUserPrompt != null && current.chunkUserPrompt !== settings.chunk_prompt_template) || (current.injectPrompt != null && current.injectPrompt !== settings.inject_prompt));
-    for (const preset of settings.summarize_presets) select.append($('<option>').val(preset.id).text(preset.id === current?.id && dirty ? `${preset.name} *` : preset.name));
+    for (const preset of settings.summarize_presets) select.append($('<option>').val(preset.id).text(preset.name));
     select.val(settings.current_summarize_preset || '');
-    $('#rmr_update_summarize_preset,#rmr_delete_summarize_preset,#rmr_export_summarize_preset').prop('disabled', !settings.current_summarize_preset);
+    $('#rmr_delete_summarize_preset,#rmr_export_summarize_preset').prop('disabled', !settings.current_summarize_preset);
+    presetStatus();
 }
 function applyPreset(id) {
     const preset = presetById(id); if (!preset) return;
@@ -441,14 +518,41 @@ function applyPreset(id) {
     $('#rmr_memory_system_prompt').val(settings.memory_system_prompt); $('#rmr_memory_prompt_template').val(settings.memory_prompt_template); $('#rmr_chunk_system_prompt').val(settings.chunk_system_prompt); $('#rmr_chunk_prompt_template').val(settings.chunk_prompt_template); $('#rmr_inject_prompt').val(settings.inject_prompt); $('#rmr_profile').val(settings.profile || ''); $('#rmr_rate_limit').val(settings.rate_limit);
 }
 function snapshot(name) { return { id: `preset-${Date.now()}-${Math.floor(Math.random()*1000)}`, name, systemPrompt: settings.memory_system_prompt, userPrompt: settings.memory_prompt_template, chunkSystemPrompt: settings.chunk_system_prompt, chunkUserPrompt: settings.chunk_prompt_template, injectPrompt: settings.inject_prompt, profile: settings.profile, rateLimit: settings.rate_limit }; }
+const discardConfirm = () => confirm(getText('rmr_preset_discard_confirm', 'The current prompts have unsaved changes. Discard them?'));
+function saveAsNewPreset() {
+    const name = prompt(getText('rmr_preset_name_prompt', 'Preset name:'), presetById(settings.current_summarize_preset)?.name || '')?.trim();
+    if (!name) return;
+    const duplicate = settings.summarize_presets.find(item => item.name.toLowerCase() === name.toLowerCase());
+    if (duplicate && !confirm(`${getText('rmr_preset_overwrite_confirm', 'Overwrite this preset?')} "${duplicate.name}"`)) return;
+    const preset = snapshot(name);
+    if (duplicate) Object.assign(duplicate, preset, { id: duplicate.id }); else settings.summarize_presets.push(preset);
+    settings.current_summarize_preset = duplicate?.id || preset.id; save(); presetUI();
+    toastr.success(`${getText('rmr_preset_saved_toast', 'Preset saved:')} ${name}`, 'IF Memory');
+}
+function showPromptTab(tab) {
+    $('.rmr-prompt-tab').each(function () { const active = this.dataset.rmrTab === tab; $(this).toggleClass('active', active).attr('aria-selected', String(active)); });
+    $('[data-rmr-panel]').each(function () { this.hidden = this.dataset.rmrPanel !== tab; });
+}
 function bindPresets() {
     presetUI();
-    $('#rmr_summarize_preset').off('change').on('change', function () { if (this.value) applyPreset(this.value); else { settings.current_summarize_preset = null; save(); } presetUI(); });
-    $('#rmr_save_summarize_preset').off('click').on('click', () => { const name = prompt('Preset name:'); if (!name?.trim()) return; const duplicate = settings.summarize_presets.find(item => item.name.toLowerCase() === name.trim().toLowerCase()); if (duplicate && !confirm(`Overwrite "${duplicate.name}"?`)) return; const preset = snapshot(name.trim()); if (duplicate) Object.assign(duplicate, preset, {id:duplicate.id}); else settings.summarize_presets.push(preset); settings.current_summarize_preset = duplicate?.id || preset.id; save(); presetUI(); });
-    $('#rmr_update_summarize_preset').off('click').on('click', () => { const preset = presetById(settings.current_summarize_preset); if (!preset) return; Object.assign(preset, snapshot(preset.name), {id:preset.id}); save(); presetUI(); toastr.success('Preset updated.','IF Memory'); });
-    $('#rmr_delete_summarize_preset').off('click').on('click', () => { const preset = presetById(settings.current_summarize_preset); if (!preset || !confirm(`Delete "${preset.name}"?`)) return; settings.summarize_presets = settings.summarize_presets.filter(item => item.id !== preset.id); settings.current_summarize_preset = null; save(); presetUI(); });
+    $('.rmr-prompt-tab').off('click').on('click', function () { showPromptTab(this.dataset.rmrTab); });
+    $('#rmr_summarize_preset').off('change').on('change', function () {
+        // Switching presets overwrites the editors, so unsaved edits need an explicit confirmation.
+        if (this.value && isPresetDirty() && !discardConfirm()) { this.value = settings.current_summarize_preset || ''; return; }
+        if (this.value) applyPreset(this.value); else { settings.current_summarize_preset = null; save(); }
+        presetUI();
+    });
+    $('#rmr_save_summarize_preset').off('click').on('click', saveAsNewPreset);
+    // Save writes into the selected preset; with no preset selected it falls back to Save as new.
+    $('#rmr_update_summarize_preset').off('click').on('click', () => {
+        const preset = presetById(settings.current_summarize_preset);
+        if (!preset) return saveAsNewPreset();
+        Object.assign(preset, snapshot(preset.name), { id: preset.id }); save(); presetUI();
+        toastr.success(`${getText('rmr_preset_saved_toast', 'Preset saved:')} ${preset.name}`, 'IF Memory');
+    });
+    $('#rmr_delete_summarize_preset').off('click').on('click', () => { const preset = presetById(settings.current_summarize_preset); if (!preset || !confirm(`${getText('rmr_preset_delete_confirm', 'Delete this preset?')} "${preset.name}"`)) return; settings.summarize_presets = settings.summarize_presets.filter(item => item.id !== preset.id); settings.current_summarize_preset = null; save(); presetUI(); });
     $('#rmr_export_summarize_preset').off('click').on('click', () => { const preset = presetById(settings.current_summarize_preset); if (preset) download(`${preset.name}.json`, {version:'3.2',type:'summarize',preset}); });
-    $('#rmr_import_summarize_preset').off('click').on('click', () => choose(data => { if (data.type !== 'summarize' || !data.preset?.name || !data.preset?.userPrompt) throw new Error('Invalid summarize preset.'); const preset = {...data.preset,id:`preset-${Date.now()}`}; if (/{{timeline}}/i.test(preset.userPrompt)) preset.userPrompt = USER_PROMPT; settings.summarize_presets.push(preset); settings.current_summarize_preset = preset.id; save(); applyPreset(preset.id); presetUI(); }));
+    $('#rmr_import_summarize_preset').off('click').on('click', () => choose(data => { if (data.type !== 'summarize' || !data.preset?.name || !data.preset?.userPrompt) throw new Error('Invalid summarize preset.'); if (isPresetDirty() && !discardConfirm()) return; const preset = {...data.preset,id:`preset-${Date.now()}`}; if (/{{timeline}}/i.test(preset.userPrompt)) preset.userPrompt = USER_PROMPT; settings.summarize_presets.push(preset); settings.current_summarize_preset = preset.id; save(); applyPreset(preset.id); presetUI(); }));
 }
 function download(name,data) { const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})); const a=Object.assign(document.createElement('a'),{href:url,download:name.replace(/[^a-z0-9_.-]/gi,'_')}); document.body.append(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
 function choose(callback) { const input=Object.assign(document.createElement('input'),{type:'file',accept:'.json'}); input.onchange=async()=>{try{await callback(JSON.parse(await input.files[0].text()));toastr.success('Import complete.','IF Memory');}catch(error){toastr.error(error.message,'IF Memory');}};input.click(); }
