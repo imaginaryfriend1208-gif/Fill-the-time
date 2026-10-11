@@ -32,8 +32,9 @@ const mod = [
   "const getContext = () => ({ substituteParams: t => t, name1: 'a', name2: 'b' });",
   'export let ConnectionManagerRequestService = { async sendRequest(profileId, messages, maxTokens, custom, override) { calls.push({ profileId, maxTokens, custom, n: messages.length, last: messages.at(-1) }); const next = queue.shift(); if (next instanceof Error) throw next; return next; } };',
   'export function __noCMRS() { ConnectionManagerRequestService = null; }',
-  fn('sendRequest'), fn('extractContent'), fn('extractFinishReason'), fn('generateFromText'),
-  'export { sendRequest, extractContent, extractFinishReason, generateFromText };',
+  'const debug = () => {};',
+  fn('sendRequest'), fn('extractContent'), fn('rawFinishReason'), fn('extractFinishReason'), fn('extractUsage'), fn('describeChunkTruncation'), fn('generateFromText'),
+  'export { sendRequest, extractContent, extractFinishReason, extractUsage, generateFromText };',
 ].join('\n');
 const tmp = join(tmpdir(), `ifm-g56-${process.pid}.mjs`); writeFileSync(tmp, mod);
 let m; try { m = await import(pathToFileURL(tmp).href); } finally { unlinkSync(tmp); }
@@ -50,6 +51,16 @@ t('claude end_turn', m.extractFinishReason({ content: [{ type: 'text', text: 'x'
 t('gemini MAX_TOKENS', m.extractFinishReason({ candidates: [{ content: { parts: [{ text: 'x' }] }, finishReason: 'MAX_TOKENS' }] }) === 'length');
 t('unknown shape -> null', m.extractFinishReason({ foo: 1 }) === null);
 t('string -> null', m.extractFinishReason('plain') === null);
+
+console.log('-- extractUsage --');
+let u = m.extractUsage({ choices: [], usage: { completion_tokens: 10000, completion_tokens_details: { reasoning_tokens: 9200 } } });
+t('openai usage + reasoning', u.output === 10000 && u.reasoning === 9200, u);
+u = m.extractUsage({ candidates: [], usageMetadata: { candidatesTokenCount: 800, thoughtsTokenCount: 9200 } });
+t('gemini output includes thoughts', u.output === 10000 && u.reasoning === 9200, u);
+u = m.extractUsage({ content: [], usage: { output_tokens: 1500 } });
+t('claude output_tokens', u.output === 1500 && u.reasoning === null, u);
+u = m.extractUsage({ foo: 1 });
+t('no usage -> nulls', u.output === null && u.reasoning === null, u);
 
 console.log('-- extractContent --');
 t('openai', m.extractContent(oai('hello')) === 'hello');
@@ -107,5 +118,16 @@ t('pieces are trimmed then joined by a single space', r === 'ends with newline n
 m.__set({ ...base }, 'OLD', [oai('mid-sen', 'length'), oai('tence.', 'stop')]);
 r = await m.generateFromText('body', 0, true, null, {});
 t('word cut mid-way still gets a separator (readable, never glued)', r === 'mid-sen tence.', r);
+
+console.log('-- chunk truncation warning --');
+const withUsage = (content, usage) => ({ ...oai(content, 'length'), usage });
+m.__set(base, null, [withUsage('short digest.', { completion_tokens: 2048, completion_tokens_details: { reasoning_tokens: 2000 } })]);
+await m.generateFromText('body', 0, false, null, {});
+let warn = m.calls.find(c => c.warn)?.warn || '';
+t('thinking-heavy -> points at reasoning effort', /thinking 2000 tokens/.test(warn) && /reasoning effort/.test(warn) && /"length"/.test(warn), warn);
+m.__set(base, null, [oai('short digest.', 'length')]);
+await m.generateFromText('body', 0, false, null, {});
+warn = m.calls.find(c => c.warn)?.warn || '';
+t('far below limit, no usage -> provider cap hint', /limit 2048/.test(warn) && /capping output/.test(warn), warn);
 
 console.log(fail ? `\n${fail} FAIL` : '\nALL PASS'); process.exit(fail ? 1 : 0);

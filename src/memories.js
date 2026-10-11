@@ -443,7 +443,7 @@ async function sendRequest(profileId, messages, maxTokens, overridePayload) {
         const reason = error?.cause?.message || error?.message || String(error);
         throw new Error(`Summarization profile "${getProfileName(profileId) || profileId}" failed: ${reason}`);
     }
-    return { content: extractContent(raw), finishReason: extractFinishReason(raw) };
+    return { content: extractContent(raw), finishReason: extractFinishReason(raw), rawFinishReason: rawFinishReason(raw), usage: extractUsage(raw) };
 }
 
 /** Pull the assistant text out of a raw chat-completion / text-completion response. */
@@ -458,14 +458,50 @@ function extractContent(raw) {
     return raw.text ?? raw.message?.content?.[0]?.text ?? raw.output ?? raw.results?.[0]?.text ?? '';
 }
 
+/** The provider's finish reason exactly as reported, or null. */
+function rawFinishReason(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    return raw.choices?.[0]?.finish_reason ?? raw.stop_reason ?? raw.candidates?.[0]?.finishReason ?? raw.finish_reason ?? null;
+}
+
 /** Normalize the provider's finish reason to 'length' | 'stop' | null. */
 function extractFinishReason(raw) {
-    if (!raw || typeof raw !== 'object') return null;
-    const value = raw.choices?.[0]?.finish_reason ?? raw.stop_reason ?? raw.candidates?.[0]?.finishReason ?? raw.finish_reason ?? null;
+    const value = rawFinishReason(raw);
     if (value == null) return null;
     const text = String(value).toLowerCase();
     if (['length', 'max_tokens', 'max_output_tokens', 'maxtokens'].includes(text)) return 'length';
     return 'stop';
+}
+
+/**
+ * Output token usage as reported by the provider: { output, reasoning } (null when not reported).
+ * `output` covers everything the model generated, thinking included, so it can be compared with the limit.
+ */
+function extractUsage(raw) {
+    if (!raw || typeof raw !== 'object') return { output: null, reasoning: null };
+    const usage = raw.usage, gemini = raw.usageMetadata;
+    const num = value => (value == null || value === '' || Number.isNaN(Number(value)) ? null : Number(value));
+    if (gemini) {
+        const reasoning = num(gemini.thoughtsTokenCount);
+        const visible = num(gemini.candidatesTokenCount);
+        return { output: visible == null && reasoning == null ? null : (visible || 0) + (reasoning || 0), reasoning };
+    }
+    const reasoning = num(usage?.completion_tokens_details?.reasoning_tokens ?? usage?.output_tokens_details?.reasoning_tokens ?? usage?.reasoning_tokens);
+    return { output: num(usage?.completion_tokens ?? usage?.output_tokens), reasoning };
+}
+
+/** Explain a chunk digest cut off by the output limit, using the provider's usage numbers when it sends them. */
+async function describeChunkTruncation(response, text, maxTokens) {
+    let visible = Math.ceil(text.length / 4);
+    try { visible = await getContext().getTokenCountAsync(text); } catch { /* keep the estimate */ }
+    const { output, reasoning } = response.usage || {};
+    const parts = [`limit ${maxTokens}`, `finish reason "${response.rawFinishReason}"`, `digest about ${visible} tokens`];
+    if (output != null) parts.push(`model output ${output} tokens`);
+    if (reasoning) parts.push(`thinking ${reasoning} tokens`);
+    const head = `A chunk digest was stopped by the output limit (${parts.join(', ')}).`;
+    if (reasoning && reasoning >= visible) return `${head} Thinking used most of the budget. Lower the reasoning effort or thinking budget in the preset of the chunk profile, or raise its Response Length.`;
+    if (visible < maxTokens * 0.5 && (output == null || output < maxTokens * 0.5)) return `${head} The digest is far below the limit, so the provider or proxy is likely capping output on its side, or the model spent the budget on hidden thinking. Check the digest; if it looks complete, this warning can be ignored.`;
+    return `${head} Raise Response Length in the preset of the chunk profile.`;
 }
 
 function normalizeStockEntry(value) {
@@ -810,8 +846,9 @@ async function generateFromText(content, chunk = 0, includePrevious = true, prev
         }
         if (response.finishReason === 'length') {
             lastGenerationTruncated = true;
+            debug('Generation stopped by the output limit:', { maxTokens, finishReason: response.rawFinishReason, usage: response.usage });
             rawWarn(isChunkPass
-                ? `A chunk digest was cut off by the output limit (${maxTokens} tokens). Raise Response Length in the preset of the chunk profile. Reasoning models also spend this budget on thinking.`
+                ? await describeChunkTruncation(response, text, maxTokens)
                 : `The summary was still cut off after ${rounds} continuation${rounds === 1 ? '' : 's'}. Review it before accepting, or raise "Merge max output tokens".`);
         } else lastGenerationTruncated = false;
         return text;
